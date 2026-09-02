@@ -53,3 +53,12 @@ test("holding Shift shows a detail loupe at the pointer", async () => {
   assert.match(styles, /\.detail-lens \{[^}]*position:fixed[^}]*border-radius:50%/);
   assert.match(styles, /\.detail-lens \{[^}]*pointer-events:none/);
 });
+
+test("the top strip tracks viewed images in filename order", async () => {
+  const [page, styles] = await Promise.all([readFile(pageUrl, "utf8"), readFile(stylesUrl, "utf8")]);
+  assert.match(page, /left\.name\.localeCompare\(right\.name\)/);
+  assert.match(page, /className="view-progress"/);
+  assert.match(page, /historyRef\.current\.get\(photo\.id\)\?\.shown/);
+  assert.match(styles, /\.view-progress \{[^}]*height:4px[^}]*grid-template-columns:repeat\(var\(--photo-count\),minmax\(0,1fr\)\)/);
+  assert.match(styles, /\.view-progress-dot\.viewed \{ background:#fff/);
+});

@@ -1,4 +1,4 @@
-import { ChangeEvent, CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { ChangeEvent, CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { arrangePhotos, createSmartMosaic, MosaicLayout, PhotoUsage, smallTilePriorities, Viewport } from "./layout";
 
 type Photo = { id: string; name: string; url: string; width: number; height: number; lastModified: number };
@@ -91,6 +91,10 @@ export default function Home() {
   const countdownDurationRef = useRef(intervalMs);
   const hoveredTileRef = useRef<{ element: HTMLElement; photo: Photo } | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
+  const nameOrderedPhotos = useMemo(() => [...photos].sort((left, right) => (
+    left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
+  )), [photos]);
+  const viewedCount = photos.reduce((count, photo) => count + Number((historyRef.current.get(photo.id)?.shown ?? 0) > 0), 0);
 
   const advance = useCallback(() => {
     if (!photosRef.current.length) return;
@@ -396,6 +400,26 @@ export default function Home() {
         <a className="brand" href="/" aria-label="Zewasliga home"><span className="brand-mark"><i /><i /><i /></span><span>ZEWASLIGA</span></a>
         {photos.length ? <button className="quiet-button" onClick={chooseFolder}>Change folder</button> : <span className="top-note">ZERO WASTE · FULL FRAME</span>}
       </header>
+
+      {photos.length > 0 && (
+        <div
+          className="view-progress"
+          role="progressbar"
+          aria-label={`${viewedCount} of ${photos.length} images viewed`}
+          aria-valuemin={0}
+          aria-valuemax={photos.length}
+          aria-valuenow={viewedCount}
+          style={{ "--photo-count": nameOrderedPhotos.length } as CSSProperties}
+        >
+          {nameOrderedPhotos.map((photo) => (
+            <span
+              key={photo.id}
+              className={`view-progress-dot ${(historyRef.current.get(photo.id)?.shown ?? 0) > 0 ? "viewed" : ""}`}
+              aria-hidden="true"
+            />
+          ))}
+        </div>
+      )}
 
       {photos.length > 0 && (
         <div className={`control-dock ${showChrome ? "visible" : ""}`}>
