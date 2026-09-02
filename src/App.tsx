@@ -1,4 +1,5 @@
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, CSSProperties, useCallback, useEffect, useRef, useState } from "react";
+import { arrangePhotos, createSmartMosaic, MosaicLayout, PhotoUsage, Viewport } from "./layout";
 
 type Photo = { id: string; name: string; url: string; width: number; height: number };
 type DirectoryPickerHandle = FileSystemDirectoryHandle & {
@@ -8,15 +9,6 @@ type DirectoryPickerWindow = Window & { showDirectoryPicker?: () => Promise<Dire
 
 const IMAGE_TYPES = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
 const SPEEDS = [3000, 5000, 8000, 12000];
-
-function shuffle<T>(items: T[]) {
-  const result = [...items];
-  for (let i = result.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-  return result;
-}
 
 function getDimensions(url: string) {
   return new Promise<{ width: number; height: number }>((resolve) => {
@@ -47,33 +39,50 @@ async function collectImages(handle: DirectoryPickerHandle): Promise<File[]> {
   return files;
 }
 
-function desiredCount(total: number) {
-  if (typeof window === "undefined") return Math.min(4, total);
-  const area = window.innerWidth * window.innerHeight;
-  const base = area > 1_700_000 ? 6 : area > 900_000 ? 5 : area > 520_000 ? 4 : 3;
-  return Math.max(1, Math.min(total, base + (Math.random() > 0.62 ? -1 : 0)));
+type GalleryFrame = { layout: MosaicLayout<Photo>; key: number };
+
+function currentViewport(): Viewport {
+  if (typeof window === "undefined") return { width: 1280, height: 720 };
+  return { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) };
 }
 
 export default function Home() {
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [visible, setVisible] = useState<Photo[]>([]);
-  const [queue, setQueue] = useState<Photo[]>([]);
+  const [frame, setFrame] = useState<GalleryFrame | null>(null);
   const [paused, setPaused] = useState(false);
   const [intervalMs, setIntervalMs] = useState(5000);
   const [showChrome, setShowChrome] = useState(true);
   const [message, setMessage] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const shellRef = useRef<HTMLElement>(null);
   const photosRef = useRef<Photo[]>([]);
+  const frameRef = useRef<GalleryFrame | null>(null);
+  const viewportRef = useRef<Viewport>(currentViewport());
+  const historyRef = useRef<Map<string, PhotoUsage>>(new Map());
+  const slideNumberRef = useRef(0);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const advance = useCallback(() => {
     if (!photosRef.current.length) return;
-    const count = desiredCount(photosRef.current.length);
-    setQueue((current) => {
-      const pool = current.length < count ? shuffle(photosRef.current) : current;
-      setVisible(pool.slice(0, count));
-      return pool.slice(count);
+    const previousIds = new Set(frameRef.current?.layout.tiles.map((tile) => tile.photo.id) ?? []);
+    const layout = createSmartMosaic(
+      photosRef.current,
+      viewportRef.current,
+      historyRef.current,
+      previousIds,
+      slideNumberRef.current,
+    );
+    if (!layout) return;
+
+    const nextSlideNumber = slideNumberRef.current + 1;
+    layout.tiles.forEach(({ photo }) => {
+      const usage = historyRef.current.get(photo.id) ?? { shown: 0, lastShown: Number.NEGATIVE_INFINITY };
+      historyRef.current.set(photo.id, { shown: usage.shown + 1, lastShown: nextSlideNumber });
     });
+    slideNumberRef.current = nextSlideNumber;
+    const nextFrame = { layout, key: nextSlideNumber };
+    frameRef.current = nextFrame;
+    setFrame(nextFrame);
   }, []);
 
   const loadFiles = useCallback(async (files: File[]) => {
@@ -84,11 +93,18 @@ export default function Home() {
     }
     photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.url));
     photosRef.current = nextPhotos;
+    historyRef.current = new Map();
+    slideNumberRef.current = 0;
+    frameRef.current = null;
     setPhotos(nextPhotos);
-    const shuffled = shuffle(nextPhotos);
-    const count = desiredCount(nextPhotos.length);
-    setVisible(shuffled.slice(0, count));
-    setQueue(shuffled.slice(count));
+    const layout = createSmartMosaic(nextPhotos, viewportRef.current, historyRef.current, new Set(), 0);
+    if (layout) {
+      layout.tiles.forEach(({ photo }) => historyRef.current.set(photo.id, { shown: 1, lastShown: 1 }));
+      slideNumberRef.current = 1;
+      const firstFrame = { layout, key: 1 };
+      frameRef.current = firstFrame;
+      setFrame(firstFrame);
+    }
     setPaused(false);
     setMessage("");
   }, []);
@@ -135,6 +151,42 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKey);
   }, [advance, chooseFolder]);
 
+  useEffect(() => {
+    let animationFrame = 0;
+    const updateLayout = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        const bounds = shellRef.current?.getBoundingClientRect();
+        const viewport = {
+          width: Math.max(1, bounds?.width ?? window.innerWidth),
+          height: Math.max(1, bounds?.height ?? window.innerHeight),
+        };
+        const previous = viewportRef.current;
+        if (Math.abs(previous.width - viewport.width) < 2 && Math.abs(previous.height - viewport.height) < 2) return;
+        viewportRef.current = viewport;
+
+        const currentFrame = frameRef.current;
+        if (!currentFrame) return;
+        const layout = arrangePhotos(currentFrame.layout.tiles.map((tile) => tile.photo), viewport);
+        if (!layout) return;
+        const reflowedFrame = { ...currentFrame, layout };
+        frameRef.current = reflowedFrame;
+        setFrame(reflowedFrame);
+      });
+    };
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateLayout);
+    if (shellRef.current) observer?.observe(shellRef.current);
+    window.addEventListener("resize", updateLayout);
+    window.visualViewport?.addEventListener("resize", updateLayout);
+    updateLayout();
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      observer?.disconnect();
+      window.removeEventListener("resize", updateLayout);
+      window.visualViewport?.removeEventListener("resize", updateLayout);
+    };
+  }, []);
+
   useEffect(() => () => photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.url)), []);
 
   const wakeChrome = () => {
@@ -143,17 +195,24 @@ export default function Home() {
     if (photos.length && !paused) hideTimer.current = setTimeout(() => setShowChrome(false), 2600);
   };
 
-  const layoutClass = useMemo(() => `layout-${visible.length}`, [visible.length]);
-
   return (
-    <main className={`app-shell ${photos.length ? "is-playing" : ""}`} onPointerMove={wakeChrome}>
+    <main ref={shellRef} className={`app-shell ${photos.length ? "is-playing" : ""}`} onPointerMove={wakeChrome}>
       <div className="ambient" aria-hidden="true" />
       {photos.length ? (
-        <section className={`mosaic ${layoutClass}`} aria-label="Photo slideshow">
-          {visible.map((photo, index) => (
-            <figure className={`tile tile-${index + 1} ${photo.height > photo.width ? "portrait" : "landscape"}`} key={`${photo.id}-${visible[0]?.id}`}>
-              <img src={photo.url} alt={photo.name} draggable={false} />
-              <figcaption>{photo.name}</figcaption>
+        <section className="mosaic" aria-label="Photo slideshow">
+          {frame?.layout.tiles.map((tile) => (
+            <figure
+              className="tile"
+              key={`${tile.photo.id}-${frame.key}`}
+              style={{
+                "--tile-x": `${tile.x * 100}%`,
+                "--tile-y": `${tile.y * 100}%`,
+                "--tile-width": `${tile.width * 100}%`,
+                "--tile-height": `${tile.height * 100}%`,
+              } as CSSProperties}
+            >
+              <img src={tile.photo.url} alt={tile.photo.name} draggable={false} />
+              <figcaption>{tile.photo.name}</figcaption>
             </figure>
           ))}
         </section>
@@ -184,7 +243,7 @@ export default function Home() {
           <button className="next-button" onClick={advance}>Next mix <span aria-hidden="true">→</span></button>
           <span className="divider" />
           <label className="speed-control"><span>PACE</span><select value={intervalMs} onChange={(event) => setIntervalMs(Number(event.target.value))}>{SPEEDS.map((speed) => <option key={speed} value={speed}>{speed / 1000}s</option>)}</select></label>
-          <span className="counter"><b>{visible.length}</b> / {photos.length}</span>
+          <span className="counter"><b>{frame?.layout.tiles.length ?? 0}</b> / {photos.length}</span>
           <button className="fullscreen-button" onClick={toggleFullscreen} aria-label="Toggle fullscreen"><span aria-hidden="true">⌗</span></button>
         </div>
       )}

@@ -39,21 +39,12 @@ h1 { margin:20px 0 22px; font-size:clamp(58px,7.4vw,126px); line-height:.84; let
 .demo-b { background:radial-gradient(circle at 68% 45%,#f4d8bd 0 15%,transparent 15.4%),linear-gradient(120deg,#a94232,#e57b4b); }
 .demo-c { background:linear-gradient(25deg,#112e3e 0 42%,#e7dcab 42% 60%,#6c8ca0 60%); }
 
-.mosaic { width:100vw; height:100svh; display:grid; gap:3px; background:#0a0a09; }
-.tile { position:relative; margin:0; min-width:0; min-height:0; overflow:hidden; background:#1a1a18; animation:tile-in .8s cubic-bezier(.2,.75,.2,1) both; }
-.tile:nth-child(2) { animation-delay:.06s; } .tile:nth-child(3) { animation-delay:.12s; } .tile:nth-child(4) { animation-delay:.18s; } .tile:nth-child(5) { animation-delay:.24s; } .tile:nth-child(6) { animation-delay:.3s; }
-.tile img { width:100%; height:100%; display:block; object-fit:cover; transform:scale(1.015); animation:slow-breathe 11s ease-in-out alternate infinite; }
+.mosaic { position:absolute; inset:0; overflow:hidden; background:#171814; }
+.tile { position:absolute; left:var(--tile-x); top:var(--tile-y); width:var(--tile-width); height:var(--tile-height); margin:0; min-width:0; min-height:0; overflow:hidden; background:#1a1a18; animation:tile-in .65s cubic-bezier(.2,.75,.2,1) both; }
+.tile:nth-child(2) { animation-delay:.045s; } .tile:nth-child(3) { animation-delay:.09s; } .tile:nth-child(4) { animation-delay:.135s; } .tile:nth-child(5) { animation-delay:.18s; } .tile:nth-child(6) { animation-delay:.225s; }
+.tile img { width:100%; height:100%; display:block; object-fit:cover; }
 .tile figcaption { position:absolute; left:15px; bottom:13px; color:white; font:600 10px/1 Arial,sans-serif; letter-spacing:.12em; text-transform:uppercase; opacity:0; text-shadow:0 1px 7px black; transition:opacity .2s; }
 .tile:hover figcaption { opacity:.9; }
-.layout-1 { grid-template-columns:1fr; }
-.layout-2 { grid-template-columns:1fr 1fr; }
-.layout-3 { grid-template-columns:1.35fr .75fr; grid-template-rows:1fr 1fr; }
-.layout-3 .tile-1 { grid-row:1/3; }
-.layout-4 { grid-template-columns:1.1fr .9fr; grid-template-rows:1fr 1fr; }
-.layout-5 { grid-template-columns:1.15fr .8fr 1fr; grid-template-rows:1fr 1fr; }
-.layout-5 .tile-1 { grid-row:1/3; }
-.layout-5 .tile-4 { grid-column:2/4; }
-.layout-6 { grid-template-columns:1.05fr .9fr 1.05fr; grid-template-rows:1fr 1fr; }
 
 .control-dock { position:fixed; z-index:30; left:50%; bottom:24px; transform:translate(-50%,18px); display:flex; align-items:center; gap:8px; min-height:58px; padding:7px; border:1px solid rgba(255,255,255,.2); border-radius:18px; background:rgba(17,17,15,.76); color:white; backdrop-filter:blur(20px) saturate(1.4); box-shadow:0 16px 50px rgba(0,0,0,.28); opacity:0; pointer-events:none; transition:opacity .3s ease,transform .3s ease; }
 .control-dock.visible { opacity:1; pointer-events:auto; transform:translate(-50%,0); }
@@ -71,8 +62,7 @@ h1 { margin:20px 0 22px; font-size:clamp(58px,7.4vw,126px); line-height:.84; let
 .toast { position:fixed; z-index:40; left:50%; top:90px; transform:translateX(-50%); background:#8e2b20; color:white; padding:10px 14px; border-radius:8px; font-size:13px; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 
-@keyframes tile-in { from { opacity:0; transform:scale(.985); filter:brightness(.45); } to { opacity:1; transform:scale(1); filter:brightness(1); } }
-@keyframes slow-breathe { from { transform:scale(1.015); } to { transform:scale(1.055); } }
+@keyframes tile-in { from { filter:brightness(.55); } to { filter:brightness(1); } }
 
 @media (max-width:800px) {
   .topbar { height:70px; padding:0 20px; }
@@ -83,10 +73,6 @@ h1 { margin:20px 0 22px; font-size:clamp(58px,7.4vw,126px); line-height:.84; let
   .demo-mosaic { order:3; min-height:310px; height:38vh; width:100%; margin-top:52px; transform:rotate(1deg); }
   .primary-action { margin-top:4px; }
   .privacy-note,.error-message { width:100%; }
-  .layout-4,.layout-5,.layout-6 { grid-template-columns:1fr 1fr; grid-template-rows:repeat(3,1fr); }
-  .layout-5 .tile-1,.layout-5 .tile-4 { grid-row:auto; grid-column:auto; }
-  .layout-5 .tile-1 { grid-row:span 2; }
-  .layout-6 .tile-1,.layout-4 .tile-1 { grid-row:span 2; }
   .control-dock { width:calc(100% - 24px); bottom:12px; justify-content:center; }
   .counter,.divider { display:none; }
   .next-button { flex:1; }
