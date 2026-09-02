@@ -1,9 +1,10 @@
-"use client";
-
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Photo = { id: string; name: string; url: string; width: number; height: number };
-type DirectoryPickerWindow = Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> };
+type DirectoryPickerHandle = FileSystemDirectoryHandle & {
+  values(): AsyncIterableIterator<FileSystemFileHandle | FileSystemDirectoryHandle>;
+};
+type DirectoryPickerWindow = Window & { showDirectoryPicker?: () => Promise<DirectoryPickerHandle> };
 
 const IMAGE_TYPES = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
 const SPEEDS = [3000, 5000, 8000, 12000];
@@ -35,13 +36,13 @@ async function photosFromFiles(files: File[]) {
   }));
 }
 
-async function collectImages(handle: FileSystemDirectoryHandle): Promise<File[]> {
+async function collectImages(handle: DirectoryPickerHandle): Promise<File[]> {
   const files: File[] = [];
   for await (const entry of handle.values()) {
     if (entry.kind === "file") {
       const file = await entry.getFile();
       if (IMAGE_TYPES.has(file.type) || /\.(avif|gif|jpe?g|png|webp)$/i.test(file.name)) files.push(file);
-    } else if (entry.kind === "directory") files.push(...(await collectImages(entry)));
+    } else if (entry.kind === "directory") files.push(...(await collectImages(entry as DirectoryPickerHandle)));
   }
   return files;
 }

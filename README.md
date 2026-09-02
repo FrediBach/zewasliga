@@ -20,8 +20,11 @@ Open `http://localhost:3000`, choose a folder of JPG, PNG, WebP, AVIF, or GIF fi
 
 The folder picker uses the File System Access API where available and falls back to a directory file input in other browsers.
 
-## Build
+## Build for local preview
 
 ```bash
 npm run build
+npm run preview
 ```
+
+Zewasliga has no backend, deployment configuration, analytics, or upload service. The production build is only for running a locally optimized preview.
