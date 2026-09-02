@@ -138,7 +138,11 @@ function makeLayout<T extends LayoutPhoto>(
   return tiles;
 }
 
-function scoreLayout<T extends LayoutPhoto>(tiles: MosaicTile<T>[], viewport: Viewport) {
+function scoreLayout<T extends LayoutPhoto>(
+  tiles: MosaicTile<T>[],
+  viewport: Viewport,
+  prioritizedIds: ReadonlySet<string>,
+) {
   const crop = tiles.reduce((sum, tile) => sum + tile.crop, 0) / tiles.length;
   const worstCrop = Math.max(...tiles.map((tile) => tile.crop));
   const shortEdgeTarget = clamp(Math.min(viewport.width, viewport.height) * 0.19, 104, 190);
@@ -147,16 +151,34 @@ function scoreLayout<T extends LayoutPhoto>(tiles: MosaicTile<T>[], viewport: Vi
     const shortage = Math.max(0, (shortEdgeTarget - shortEdge) / shortEdgeTarget);
     return sum + shortage * shortage;
   }, 0) / tiles.length;
+  const prioritizedTiles = tiles.filter((tile) => prioritizedIds.has(tile.photo.id));
+  const targetAreas = tiles
+    .map((tile) => tile.width * tile.height)
+    .sort((left, right) => right - left)
+    .slice(0, prioritizedTiles.length);
+  const prioritizedAreas = prioritizedTiles
+    .map((tile) => tile.width * tile.height)
+    .sort((left, right) => right - left);
+  const priorityPenalty = prioritizedAreas.length
+    ? prioritizedAreas.reduce((sum, area, index) => {
+      const targetArea = targetAreas[index];
+      return sum + Math.max(0, (targetArea - area) / targetArea);
+    }, 0) / prioritizedAreas.length
+    : 0;
 
-  return { crop, score: crop * 1.3 + worstCrop * 0.22 + smallTilePenalty * 0.34 };
+  return { crop, score: crop * 1.3 + worstCrop * 0.22 + smallTilePenalty * 0.34 + priorityPenalty * 0.9 };
 }
 
-function bestArrangementForOrder<T extends LayoutPhoto>(photos: readonly T[], viewport: Viewport) {
+function bestArrangementForOrder<T extends LayoutPhoto>(
+  photos: readonly T[],
+  viewport: Viewport,
+  prioritizedIds: ReadonlySet<string>,
+) {
   let best: MosaicLayout<T> | null = null;
   for (const groups of compositions(photos.length)) {
     for (const direction of ["rows", "columns"] as const) {
       const tiles = makeLayout(photos, groups, viewport, direction);
-      const metrics = scoreLayout(tiles, viewport);
+      const metrics = scoreLayout(tiles, viewport, prioritizedIds);
       if (!best || metrics.score < best.score) best = { tiles, ...metrics, direction };
     }
   }
@@ -168,10 +190,18 @@ function weightedSelection<T extends LayoutPhoto>(
   count: number,
   history: ReadonlyMap<string, PhotoUsage>,
   slideNumber: number,
+  prioritizedIds: ReadonlySet<string>,
   random: () => number,
 ) {
   const available = [...pool];
-  const selected: T[] = [];
+  const maximumPriorities = Math.max(1, count - 1);
+  const prioritized = shuffled(available.filter((photo) => prioritizedIds.has(photo.id)), random)
+    .slice(0, maximumPriorities);
+  const selected: T[] = [...prioritized];
+  const prioritizedSelectionIds = new Set(prioritized.map((photo) => photo.id));
+  for (let index = available.length - 1; index >= 0; index -= 1) {
+    if (prioritizedSelectionIds.has(available[index].id)) available.splice(index, 1);
+  }
   while (selected.length < count && available.length) {
     const weights = available.map((photo) => {
       const usage = history.get(photo.id);
@@ -199,6 +229,7 @@ function orderedFairPool<T extends LayoutPhoto>(
   photos: readonly T[],
   history: ReadonlyMap<string, PhotoUsage>,
   maximumCount: number,
+  prioritizedIds: ReadonlySet<string>,
   random: () => number,
 ) {
   const ranked = photos.map((photo) => ({
@@ -211,12 +242,29 @@ function orderedFairPool<T extends LayoutPhoto>(
     || left.jitter - right.jitter
   ));
   const poolSize = Math.min(ranked.length, Math.max(28, maximumCount * 7));
-  return ranked.slice(0, poolSize).map(({ photo }) => photo);
+  const pool = ranked.slice(0, poolSize).map(({ photo }) => photo);
+  const includedIds = new Set(pool.map((photo) => photo.id));
+  for (const { photo } of ranked) {
+    if (prioritizedIds.has(photo.id) && !includedIds.has(photo.id)) pool.push(photo);
+  }
+  return pool;
+}
+
+export function smallTilePriorities<T extends LayoutPhoto>(layout: MosaicLayout<T>) {
+  if (layout.tiles.length < 3) return new Set<string>();
+  const averageArea = 1 / layout.tiles.length;
+  const maximumPriorities = layout.tiles.length >= 6 ? 2 : 1;
+  const smallestTiles = [...layout.tiles]
+    .filter((tile) => tile.width * tile.height < averageArea * 0.82)
+    .sort((left, right) => left.width * left.height - right.width * right.height)
+    .slice(0, maximumPriorities);
+  return new Set(smallestTiles.map((tile) => tile.photo.id));
 }
 
 export function arrangePhotos<T extends LayoutPhoto>(
   photos: readonly T[],
   viewport: Viewport,
+  prioritizedIds: ReadonlySet<string> = new Set(),
   random: () => number = Math.random,
 ) {
   if (!photos.length) return null;
@@ -232,7 +280,7 @@ export function arrangePhotos<T extends LayoutPhoto>(
 
   let best: MosaicLayout<T> | null = null;
   for (const order of orders) {
-    const candidate = bestArrangementForOrder(order, viewport);
+    const candidate = bestArrangementForOrder(order, viewport, prioritizedIds);
     if (!best || candidate.score < best.score) best = candidate;
   }
   return best;
@@ -243,6 +291,7 @@ export function createSmartMosaic<T extends LayoutPhoto>(
   viewport: Viewport,
   history: ReadonlyMap<string, PhotoUsage>,
   previousIds: ReadonlySet<string>,
+  prioritizedIds: ReadonlySet<string>,
   slideNumber: number,
   random: () => number = Math.random,
 ) {
@@ -252,20 +301,31 @@ export function createSmartMosaic<T extends LayoutPhoto>(
   const minimumCount = photos.length === 1 ? 1 : Math.max(2, targetCount - 2);
   const maximumCount = Math.min(photos.length, MAX_PHOTOS_PER_SLIDE, targetCount + 1);
   const counts = Array.from({ length: maximumCount - minimumCount + 1 }, (_, index) => minimumCount + index);
-  const pool = orderedFairPool(photos, history, maximumCount, random);
+  const pool = orderedFairPool(photos, history, maximumCount, prioritizedIds, random);
   const minimumShown = Math.min(...photos.map((photo) => history.get(photo.id)?.shown ?? 0));
   const trialCount = photos.length <= 10 ? 240 : 440;
   let best: MosaicLayout<T> | null = null;
 
   for (let trial = 0; trial < trialCount; trial += 1) {
     const count = counts[trial % counts.length];
+    const prioritizedPool = pool.filter((photo) => prioritizedIds.has(photo.id));
+    const regularPool = pool.filter((photo) => !prioritizedIds.has(photo.id));
+    const deterministicPriorities = prioritizedPool.slice(0, Math.max(1, count - 1));
     const selected = trial < counts.length
-      ? pool.slice(0, count)
-      : weightedSelection(pool, count, history, slideNumber, random);
-    const arranged = bestArrangementForOrder(shuffled(selected, random), viewport);
-    const overlap = arranged.tiles.reduce((sum, tile) => sum + Number(previousIds.has(tile.photo.id)), 0);
-    const unavoidableOverlap = Math.max(0, count + previousIds.size - photos.length);
-    const avoidableOverlap = Math.max(0, overlap - unavoidableOverlap) / count;
+      ? [...deterministicPriorities, ...regularPool].slice(0, count)
+      : weightedSelection(pool, count, history, slideNumber, prioritizedIds, random);
+    const arranged = bestArrangementForOrder(shuffled(selected, random), viewport, prioritizedIds);
+    const promotedOverlap = arranged.tiles.reduce((sum, tile) => (
+      sum + Number(previousIds.has(tile.photo.id) && prioritizedIds.has(tile.photo.id))
+    ), 0);
+    const ordinaryOverlap = arranged.tiles.reduce((sum, tile) => (
+      sum + Number(previousIds.has(tile.photo.id) && !prioritizedIds.has(tile.photo.id))
+    ), 0);
+    const availableNewPhotos = photos.length - previousIds.size;
+    const unavoidableOrdinaryOverlap = Math.max(0, count - promotedOverlap - availableNewPhotos);
+    const avoidableOverlap = Math.max(0, ordinaryOverlap - unavoidableOrdinaryOverlap) / count;
+    const desiredPromotions = Math.min(prioritizedIds.size, Math.max(1, count - 1));
+    const missingPromotions = Math.max(0, desiredPromotions - promotedOverlap) / Math.max(1, desiredPromotions);
     const usagePenalty = arranged.tiles.reduce((sum, tile) => {
       const shown = history.get(tile.photo.id)?.shown ?? 0;
       return sum + Math.max(0, shown - minimumShown);
@@ -273,6 +333,7 @@ export function createSmartMosaic<T extends LayoutPhoto>(
     const selectionScore = arranged.score
       + Math.abs(count - targetCount) * 0.018
       + avoidableOverlap * 0.48
+      + missingPromotions * 1.2
       + usagePenalty * 0.09;
 
     if (!best || selectionScore < best.score) best = { ...arranged, score: selectionScore };

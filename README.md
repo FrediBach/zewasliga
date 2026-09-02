@@ -2,7 +2,7 @@
 
 A zero-waste slide gallery that turns a local image directory into a changing, full-screen photo mosaic. Images are read directly in the browser and are never uploaded.
 
-Every slide is planned for the current viewport. Zewasliga compares fair combinations of recently unused photos, matches portrait and landscape images to row- and column-based mosaics, and chooses the arrangement with the least crop. The mosaic always covers the full screen and automatically replans itself when the window or device orientation changes.
+Every slide is planned for the current viewport. Zewasliga compares fair combinations of recently unused photos, matches portrait and landscape images to row- and column-based mosaics, and chooses the arrangement with the least crop. Photos that receive the smallest tiles are carried into the next slide and promoted into its largest spaces. The mosaic always covers the full screen and automatically replans itself when the window or device orientation changes.
 
 ## Run locally
 

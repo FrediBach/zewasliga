@@ -1,5 +1,5 @@
 import { ChangeEvent, CSSProperties, useCallback, useEffect, useRef, useState } from "react";
-import { arrangePhotos, createSmartMosaic, MosaicLayout, PhotoUsage, Viewport } from "./layout";
+import { arrangePhotos, createSmartMosaic, MosaicLayout, PhotoUsage, smallTilePriorities, Viewport } from "./layout";
 
 type Photo = { id: string; name: string; url: string; width: number; height: number };
 type DirectoryPickerHandle = FileSystemDirectoryHandle & {
@@ -39,7 +39,7 @@ async function collectImages(handle: DirectoryPickerHandle): Promise<File[]> {
   return files;
 }
 
-type GalleryFrame = { layout: MosaicLayout<Photo>; key: number };
+type GalleryFrame = { layout: MosaicLayout<Photo>; key: number; prioritizedIds: Set<string> };
 
 function currentViewport(): Viewport {
   if (typeof window === "undefined") return { width: 1280, height: 720 };
@@ -65,11 +65,13 @@ export default function Home() {
   const advance = useCallback(() => {
     if (!photosRef.current.length) return;
     const previousIds = new Set(frameRef.current?.layout.tiles.map((tile) => tile.photo.id) ?? []);
+    const prioritizedIds = frameRef.current ? smallTilePriorities(frameRef.current.layout) : new Set<string>();
     const layout = createSmartMosaic(
       photosRef.current,
       viewportRef.current,
       historyRef.current,
       previousIds,
+      prioritizedIds,
       slideNumberRef.current,
     );
     if (!layout) return;
@@ -80,7 +82,7 @@ export default function Home() {
       historyRef.current.set(photo.id, { shown: usage.shown + 1, lastShown: nextSlideNumber });
     });
     slideNumberRef.current = nextSlideNumber;
-    const nextFrame = { layout, key: nextSlideNumber };
+    const nextFrame = { layout, key: nextSlideNumber, prioritizedIds };
     frameRef.current = nextFrame;
     setFrame(nextFrame);
   }, []);
@@ -97,11 +99,11 @@ export default function Home() {
     slideNumberRef.current = 0;
     frameRef.current = null;
     setPhotos(nextPhotos);
-    const layout = createSmartMosaic(nextPhotos, viewportRef.current, historyRef.current, new Set(), 0);
+    const layout = createSmartMosaic(nextPhotos, viewportRef.current, historyRef.current, new Set(), new Set(), 0);
     if (layout) {
       layout.tiles.forEach(({ photo }) => historyRef.current.set(photo.id, { shown: 1, lastShown: 1 }));
       slideNumberRef.current = 1;
-      const firstFrame = { layout, key: 1 };
+      const firstFrame = { layout, key: 1, prioritizedIds: new Set<string>() };
       frameRef.current = firstFrame;
       setFrame(firstFrame);
     }
@@ -167,7 +169,11 @@ export default function Home() {
 
         const currentFrame = frameRef.current;
         if (!currentFrame) return;
-        const layout = arrangePhotos(currentFrame.layout.tiles.map((tile) => tile.photo), viewport);
+        const layout = arrangePhotos(
+          currentFrame.layout.tiles.map((tile) => tile.photo),
+          viewport,
+          currentFrame.prioritizedIds,
+        );
         if (!layout) return;
         const reflowedFrame = { ...currentFrame, layout };
         frameRef.current = reflowedFrame;
