@@ -16,7 +16,9 @@ Open `http://localhost:3000`, choose a folder of JPG, PNG, WebP, AVIF, or GIF fi
 ## Controls
 
 - `Space` or `K`: pause and play
-- `→`: show the next mix
+- `←` / `→`: show the previous or next mix
+- `↓`: dismiss the current mix and show the next one
+- `↑`: hold the current mix for one more selected duration
 - `F`: toggle fullscreen
 - `O`: choose another folder
 

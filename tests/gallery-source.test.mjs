@@ -9,7 +9,10 @@ test("gallery includes directory access and slideshow controls", async () => {
   assert.match(page, /showDirectoryPicker/);
   assert.match(page, /webkitdirectory/);
   assert.match(page, /requestFullscreen/);
-  assert.match(page, /setInterval\(advance/);
+  assert.match(page, /ArrowLeft/);
+  assert.match(page, /ArrowRight.*ArrowDown/);
+  assert.match(page, /ArrowUp/);
+  assert.match(page, /remainingMs \+ intervalMs/);
 });
 
 test("gallery does not retain starter preview code", async () => {

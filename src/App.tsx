@@ -60,10 +60,24 @@ export default function Home() {
   const viewportRef = useRef<Viewport>(currentViewport());
   const historyRef = useRef<Map<string, PhotoUsage>>(new Map());
   const slideNumberRef = useRef(0);
+  const frameHistoryRef = useRef<GalleryFrame[]>([]);
+  const frameIndexRef = useRef(-1);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advanceTimerRef = useRef<number | null>(null);
+  const advanceDeadlineRef = useRef(0);
 
   const advance = useCallback(() => {
     if (!photosRef.current.length) return;
+
+    const nextHistoryIndex = frameIndexRef.current + 1;
+    const savedFrame = frameHistoryRef.current[nextHistoryIndex];
+    if (savedFrame) {
+      frameIndexRef.current = nextHistoryIndex;
+      frameRef.current = savedFrame;
+      setFrame(savedFrame);
+      return;
+    }
+
     const previousIds = new Set(frameRef.current?.layout.tiles.map((tile) => tile.photo.id) ?? []);
     const prioritizedIds = frameRef.current ? smallTilePriorities(frameRef.current.layout) : new Set<string>();
     const layout = createSmartMosaic(
@@ -83,8 +97,19 @@ export default function Home() {
     });
     slideNumberRef.current = nextSlideNumber;
     const nextFrame = { layout, key: nextSlideNumber, prioritizedIds };
+    frameHistoryRef.current.push(nextFrame);
+    frameIndexRef.current = frameHistoryRef.current.length - 1;
     frameRef.current = nextFrame;
     setFrame(nextFrame);
+  }, []);
+
+  const goBack = useCallback(() => {
+    const previousIndex = frameIndexRef.current - 1;
+    if (previousIndex < 0) return;
+    const previousFrame = frameHistoryRef.current[previousIndex];
+    frameIndexRef.current = previousIndex;
+    frameRef.current = previousFrame;
+    setFrame(previousFrame);
   }, []);
 
   const loadFiles = useCallback(async (files: File[]) => {
@@ -97,6 +122,8 @@ export default function Home() {
     photosRef.current = nextPhotos;
     historyRef.current = new Map();
     slideNumberRef.current = 0;
+    frameHistoryRef.current = [];
+    frameIndexRef.current = -1;
     frameRef.current = null;
     setPhotos(nextPhotos);
     const layout = createSmartMosaic(nextPhotos, viewportRef.current, historyRef.current, new Set(), new Set(), 0);
@@ -104,6 +131,8 @@ export default function Home() {
       layout.tiles.forEach(({ photo }) => historyRef.current.set(photo.id, { shown: 1, lastShown: 1 }));
       slideNumberRef.current = 1;
       const firstFrame = { layout, key: 1, prioritizedIds: new Set<string>() };
+      frameHistoryRef.current = [firstFrame];
+      frameIndexRef.current = 0;
       frameRef.current = firstFrame;
       setFrame(firstFrame);
     }
@@ -136,22 +165,41 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
     if (paused || photos.length === 0) return;
-    const timer = window.setInterval(advance, intervalMs);
-    return () => window.clearInterval(timer);
-  }, [advance, intervalMs, paused, photos.length]);
+
+    advanceDeadlineRef.current = Date.now() + intervalMs;
+    advanceTimerRef.current = window.setTimeout(advance, intervalMs);
+    return () => {
+      if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    };
+  }, [advance, frame?.key, intervalMs, paused, photos]);
+
+  const holdCurrentSlide = useCallback(() => {
+    if (paused || !photosRef.current.length) return;
+    const remainingMs = Math.max(0, advanceDeadlineRef.current - Date.now());
+    if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
+    const extendedDelay = remainingMs + intervalMs;
+    advanceDeadlineRef.current = Date.now() + extendedDelay;
+    advanceTimerRef.current = window.setTimeout(advance, extendedDelay);
+  }, [advance, intervalMs, paused]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) return;
       if (!photosRef.current.length && event.key.toLowerCase() !== "o") return;
       if (event.key === " " || event.key.toLowerCase() === "k") { event.preventDefault(); setPaused((value) => !value); }
-      else if (event.key === "ArrowRight") advance();
+      else if (event.key === "ArrowLeft") { event.preventDefault(); goBack(); }
+      else if (event.key === "ArrowRight" || event.key === "ArrowDown") { event.preventDefault(); advance(); }
+      else if (event.key === "ArrowUp") { event.preventDefault(); if (!event.repeat) holdCurrentSlide(); }
       else if (event.key.toLowerCase() === "f") void toggleFullscreen();
       else if (event.key.toLowerCase() === "o") void chooseFolder();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [advance, chooseFolder]);
+  }, [advance, chooseFolder, goBack, holdCurrentSlide]);
 
   useEffect(() => {
     let animationFrame = 0;
@@ -176,6 +224,7 @@ export default function Home() {
         );
         if (!layout) return;
         const reflowedFrame = { ...currentFrame, layout };
+        if (frameIndexRef.current >= 0) frameHistoryRef.current[frameIndexRef.current] = reflowedFrame;
         frameRef.current = reflowedFrame;
         setFrame(reflowedFrame);
       });
