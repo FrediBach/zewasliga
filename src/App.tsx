@@ -55,6 +55,7 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
+  const durationPieRef = useRef<HTMLSpanElement>(null);
   const photosRef = useRef<Photo[]>([]);
   const frameRef = useRef<GalleryFrame | null>(null);
   const viewportRef = useRef<Viewport>(currentViewport());
@@ -65,6 +66,7 @@ export default function Home() {
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
   const advanceDeadlineRef = useRef(0);
+  const countdownDurationRef = useRef(intervalMs);
 
   const advance = useCallback(() => {
     if (!photosRef.current.length) return;
@@ -168,6 +170,7 @@ export default function Home() {
     if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
     if (paused || photos.length === 0) return;
 
+    countdownDurationRef.current = intervalMs;
     advanceDeadlineRef.current = Date.now() + intervalMs;
     advanceTimerRef.current = window.setTimeout(advance, intervalMs);
     return () => {
@@ -181,9 +184,26 @@ export default function Home() {
     const remainingMs = Math.max(0, advanceDeadlineRef.current - Date.now());
     if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
     const extendedDelay = remainingMs + intervalMs;
+    countdownDurationRef.current = extendedDelay;
     advanceDeadlineRef.current = Date.now() + extendedDelay;
     advanceTimerRef.current = window.setTimeout(advance, extendedDelay);
   }, [advance, intervalMs, paused]);
+
+  useEffect(() => {
+    if (paused || photos.length === 0) return;
+    let animationFrame = 0;
+
+    const updatePie = () => {
+      const remainingMs = Math.max(0, advanceDeadlineRef.current - Date.now());
+      const remaining = Math.min(1, remainingMs / Math.max(1, countdownDurationRef.current));
+      durationPieRef.current?.style.setProperty("--remaining", `${remaining * 100}%`);
+      durationPieRef.current?.setAttribute("aria-valuenow", String(Math.ceil(remaining * 100)));
+      animationFrame = requestAnimationFrame(updatePie);
+    };
+
+    updatePie();
+    return () => cancelAnimationFrame(animationFrame);
+  }, [frame?.key, intervalMs, paused, photos]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -301,6 +321,18 @@ export default function Home() {
           <span className="counter"><b>{frame?.layout.tiles.length ?? 0}</b> / {photos.length}</span>
           <button className="fullscreen-button" onClick={toggleFullscreen} aria-label="Toggle fullscreen"><span aria-hidden="true">⌗</span></button>
         </div>
+      )}
+      {photos.length > 0 && (
+        <span
+          ref={durationPieRef}
+          className={`duration-pie ${paused ? "paused" : ""}`}
+          role="progressbar"
+          aria-label={paused ? "Slide timer paused" : "Slide time remaining"}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={paused ? undefined : 100}
+          title={paused ? "Slide timer paused" : "Slide time remaining"}
+        />
       )}
       {message && photos.length > 0 && <div className="toast" role="alert">{message}</div>}
       <input ref={inputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" multiple onChange={handleFallback} {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} />

@@ -57,6 +57,9 @@ h1 { margin:20px 0 22px; font-size:clamp(58px,7.4vw,126px); line-height:.84; let
 .speed-control { display:flex; flex-direction:column; gap:2px; padding:0 6px; }
 .speed-control>span { font-size:8px; color:rgba(255,255,255,.5); letter-spacing:.15em; }
 .speed-control select { color:white; background:transparent; border:0; outline:0; font-size:12px; font-weight:700; cursor:pointer; }
+.duration-pie { --remaining:100%; position:fixed; z-index:31; right:24px; bottom:24px; width:36px; height:36px; border:1px solid rgba(255,255,255,.5); border-radius:50%; background:rgba(17,17,15,.76); backdrop-filter:blur(14px); box-shadow:0 8px 28px rgba(0,0,0,.3); }
+.duration-pie::before { content:""; position:absolute; inset:4px; border-radius:50%; background:conic-gradient(from -90deg,var(--acid) var(--remaining),rgba(255,255,255,.12) 0); }
+.duration-pie.paused::after { content:""; position:absolute; inset:11px 9px; border-left:2px solid white; border-right:2px solid white; opacity:.9; }
 .counter { font:500 11px/1 monospace; color:rgba(255,255,255,.55); min-width:52px; }
 .counter b { color:white; }
 .toast { position:fixed; z-index:40; left:50%; top:90px; transform:translateX(-50%); background:#8e2b20; color:white; padding:10px 14px; border-radius:8px; font-size:13px; }
@@ -74,6 +77,7 @@ h1 { margin:20px 0 22px; font-size:clamp(58px,7.4vw,126px); line-height:.84; let
   .primary-action { margin-top:4px; }
   .privacy-note,.error-message { width:100%; }
   .control-dock { width:calc(100% - 24px); bottom:12px; justify-content:center; }
+  .duration-pie { right:18px; bottom:82px; }
   .counter,.divider { display:none; }
   .next-button { flex:1; }
 }
