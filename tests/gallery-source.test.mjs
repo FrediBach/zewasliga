@@ -37,3 +37,10 @@ test("slide images receive subtle size-aware zoom motion", async () => {
   assert.match(styles, /@keyframes image-zoom/);
   assert.match(styles, /\.is-paused \.tile img \{ animation-play-state:paused/);
 });
+
+test("clicking a tile promotes it on the next slide", async () => {
+  const page = await readFile(pageUrl, "utf8");
+  assert.match(page, /onClick=\{\(\) => promoteOnNextSlide\(tile\.photo\.id\)\}/);
+  assert.match(page, /requestedPriorityId[\s\S]*new Set\(\[requestedPriorityId\]\)/);
+  assert.match(page, /Show \$\{tile\.photo\.name\} large on the next slide/);
+});

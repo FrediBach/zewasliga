@@ -78,6 +78,7 @@ export default function Home() {
   const slideNumberRef = useRef(0);
   const frameHistoryRef = useRef<GalleryFrame[]>([]);
   const frameIndexRef = useRef(-1);
+  const requestedPriorityRef = useRef<string | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
   const advanceDeadlineRef = useRef(0);
@@ -86,9 +87,10 @@ export default function Home() {
   const advance = useCallback(() => {
     if (!photosRef.current.length) return;
 
+    const requestedPriorityId = requestedPriorityRef.current;
     const nextHistoryIndex = frameIndexRef.current + 1;
     const savedFrame = frameHistoryRef.current[nextHistoryIndex];
-    if (savedFrame) {
+    if (savedFrame && !requestedPriorityId) {
       frameIndexRef.current = nextHistoryIndex;
       frameRef.current = savedFrame;
       setFrame(savedFrame);
@@ -96,7 +98,9 @@ export default function Home() {
     }
 
     const previousIds = new Set(frameRef.current?.layout.tiles.map((tile) => tile.photo.id) ?? []);
-    const prioritizedIds = frameRef.current ? smallTilePriorities(frameRef.current.layout) : new Set<string>();
+    const prioritizedIds = requestedPriorityId
+      ? new Set([requestedPriorityId])
+      : frameRef.current ? smallTilePriorities(frameRef.current.layout) : new Set<string>();
     const layout = createSmartMosaic(
       photosRef.current,
       viewportRef.current,
@@ -114,11 +118,18 @@ export default function Home() {
     });
     slideNumberRef.current = nextSlideNumber;
     const nextFrame = { layout, key: nextSlideNumber, prioritizedIds };
+    frameHistoryRef.current = frameHistoryRef.current.slice(0, frameIndexRef.current + 1);
     frameHistoryRef.current.push(nextFrame);
     frameIndexRef.current = frameHistoryRef.current.length - 1;
+    requestedPriorityRef.current = null;
     frameRef.current = nextFrame;
     setFrame(nextFrame);
   }, []);
+
+  const promoteOnNextSlide = useCallback((photoId: string) => {
+    requestedPriorityRef.current = photoId;
+    advance();
+  }, [advance]);
 
   const goBack = useCallback(() => {
     const previousIndex = frameIndexRef.current - 1;
@@ -141,6 +152,7 @@ export default function Home() {
     slideNumberRef.current = 0;
     frameHistoryRef.current = [];
     frameIndexRef.current = -1;
+    requestedPriorityRef.current = null;
     frameRef.current = null;
     setPhotos(nextPhotos);
     const layout = createSmartMosaic(nextPhotos, viewportRef.current, historyRef.current, new Set(), new Set(), 0);
@@ -291,9 +303,12 @@ export default function Home() {
       {photos.length ? (
         <section className="mosaic" aria-label="Photo slideshow">
           {frame?.layout.tiles.map((tile) => (
-            <figure
+            <button
+              type="button"
               className="tile"
               key={`${tile.photo.id}-${frame.key}`}
+              onClick={() => promoteOnNextSlide(tile.photo.id)}
+              aria-label={`Show ${tile.photo.name} large on the next slide`}
               style={{
                 "--tile-x": `${tile.x * 100}%`,
                 "--tile-y": `${tile.y * 100}%`,
@@ -302,9 +317,9 @@ export default function Home() {
                 ...imageMotion(tile.photo.id, frame.key, tile.width * tile.height, intervalMs),
               } as CSSProperties}
             >
-              <img src={tile.photo.url} alt={tile.photo.name} draggable={false} />
-              <figcaption>{tile.photo.name}</figcaption>
-            </figure>
+              <img src={tile.photo.url} alt="" draggable={false} />
+              <span className="tile-caption" aria-hidden="true">{tile.photo.name}</span>
+            </button>
           ))}
         </section>
       ) : (

@@ -40,12 +40,13 @@ h1 { margin:20px 0 22px; font-size:clamp(58px,7.4vw,126px); line-height:.84; let
 .demo-c { background:linear-gradient(25deg,#112e3e 0 42%,#e7dcab 42% 60%,#6c8ca0 60%); }
 
 .mosaic { position:absolute; inset:0; overflow:hidden; background:#171814; }
-.tile { position:absolute; left:var(--tile-x); top:var(--tile-y); width:var(--tile-width); height:var(--tile-height); margin:0; min-width:0; min-height:0; overflow:hidden; background:#1a1a18; animation:tile-in .65s cubic-bezier(.2,.75,.2,1) both; }
+.tile { position:absolute; left:var(--tile-x); top:var(--tile-y); width:var(--tile-width); height:var(--tile-height); margin:0; padding:0; min-width:0; min-height:0; overflow:hidden; border:0; background:#1a1a18; cursor:pointer; animation:tile-in .65s cubic-bezier(.2,.75,.2,1) both; }
 .tile:nth-child(2) { animation-delay:.045s; } .tile:nth-child(3) { animation-delay:.09s; } .tile:nth-child(4) { animation-delay:.135s; } .tile:nth-child(5) { animation-delay:.18s; } .tile:nth-child(6) { animation-delay:.225s; }
 .tile img { width:100%; height:100%; display:block; object-fit:cover; transform:scale(var(--zoom-from)); animation:image-zoom var(--zoom-duration) linear both; will-change:transform; }
 .is-paused .tile img { animation-play-state:paused; }
-.tile figcaption { position:absolute; left:15px; bottom:13px; color:white; font:600 10px/1 Arial,sans-serif; letter-spacing:.12em; text-transform:uppercase; opacity:0; text-shadow:0 1px 7px black; transition:opacity .2s; }
-.tile:hover figcaption { opacity:.9; }
+.tile-caption { position:absolute; left:15px; bottom:13px; color:white; font:600 10px/1 Arial,sans-serif; letter-spacing:.12em; text-transform:uppercase; opacity:0; text-shadow:0 1px 7px black; transition:opacity .2s; }
+.tile:hover .tile-caption,.tile:focus-visible .tile-caption { opacity:.9; }
+.tile:focus-visible { outline:3px solid var(--acid); outline-offset:-3px; }
 
 .control-dock { position:fixed; z-index:30; left:50%; bottom:24px; transform:translate(-50%,18px); display:flex; align-items:center; gap:8px; min-height:58px; padding:7px; border:1px solid rgba(255,255,255,.2); border-radius:18px; background:rgba(17,17,15,.76); color:white; backdrop-filter:blur(20px) saturate(1.4); box-shadow:0 16px 50px rgba(0,0,0,.28); opacity:0; pointer-events:none; transition:opacity .3s ease,transform .3s ease; }
 .control-dock.visible { opacity:1; pointer-events:auto; transform:translate(-50%,0); }
