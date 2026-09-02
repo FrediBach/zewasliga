@@ -84,3 +84,26 @@ test("small tiles are carried into a large slot on the next slide", () => {
   assert.ok(promotedAreas[0] >= areas[0] * 0.9, "a carried photo should receive the largest slot");
   assert.ok(promotedAreas[1] >= areas[1] * 0.9, "the second carried photo should receive the second-largest slot");
 });
+
+test("newer photos get a slight early advantage without excluding older photos", () => {
+  const datedPhotos = Array.from({ length: 60 }, (_, index) => ({
+    id: `dated-${index}`,
+    width: index % 2 ? 1200 : 900,
+    height: index % 2 ? 900 : 1200,
+    lastModified: index + 1,
+  }));
+  let newerSelections = 0;
+  let olderSelections = 0;
+
+  for (let seed = 1; seed <= 24; seed += 1) {
+    const layout = createSmartMosaic(datedPhotos, { width: 1280, height: 720 }, new Map(), new Set(), new Set(), 0, seededRandom(seed));
+    assert.ok(layout);
+    for (const tile of layout.tiles) {
+      if ((tile.photo.lastModified ?? 0) > 30) newerSelections += 1;
+      else olderSelections += 1;
+    }
+  }
+
+  assert.ok(newerSelections > olderSelections, "newer photos should be selected somewhat more often at the start");
+  assert.ok(olderSelections > 0, "older photos should still be able to appear on early slides");
+});

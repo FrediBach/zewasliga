@@ -2,6 +2,7 @@ export type LayoutPhoto = {
   id: string;
   width: number;
   height: number;
+  lastModified?: number;
 };
 
 export type Viewport = {
@@ -51,6 +52,24 @@ function shuffled<T>(items: readonly T[], random: () => number) {
     [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
   }
   return result;
+}
+
+function freshnessRanks<T extends LayoutPhoto>(photos: readonly T[]) {
+  const dated = photos.filter((photo) => Number.isFinite(photo.lastModified));
+  const ranks = new Map<string, number>();
+  if (dated.length < 2) {
+    dated.forEach((photo) => ranks.set(photo.id, 0.5));
+    return ranks;
+  }
+  let oldest = Number.POSITIVE_INFINITY;
+  let newest = Number.NEGATIVE_INFINITY;
+  dated.forEach((photo) => {
+    oldest = Math.min(oldest, photo.lastModified as number);
+    newest = Math.max(newest, photo.lastModified as number);
+  });
+  const span = newest - oldest;
+  dated.forEach((photo) => ranks.set(photo.id, span ? ((photo.lastModified as number) - oldest) / span : 0.5));
+  return ranks;
 }
 
 function compositions(total: number) {
@@ -191,6 +210,7 @@ function weightedSelection<T extends LayoutPhoto>(
   history: ReadonlyMap<string, PhotoUsage>,
   slideNumber: number,
   prioritizedIds: ReadonlySet<string>,
+  freshness: ReadonlyMap<string, number>,
   random: () => number,
 ) {
   const available = [...pool];
@@ -205,10 +225,11 @@ function weightedSelection<T extends LayoutPhoto>(
   while (selected.length < count && available.length) {
     const weights = available.map((photo) => {
       const usage = history.get(photo.id);
-      if (!usage) return 5;
+      const freshnessMultiplier = 0.9 + (freshness.get(photo.id) ?? 0.5) * 0.2;
+      if (!usage) return 5 * freshnessMultiplier;
       const slidesAgo = slideNumber - usage.lastShown;
       const recencyWeight = slidesAgo <= 1 ? 0.08 : slidesAgo === 2 ? 0.32 : slidesAgo === 3 ? 0.62 : 1;
-      return recencyWeight / (1 + usage.shown * 0.24);
+      return (recencyWeight * freshnessMultiplier) / (1 + usage.shown * 0.24);
     });
     const weightTotal = weights.reduce((sum, weight) => sum + weight, 0);
     let cursor = clamp(random(), 0, 0.999999999) * weightTotal;
@@ -230,12 +251,13 @@ function orderedFairPool<T extends LayoutPhoto>(
   history: ReadonlyMap<string, PhotoUsage>,
   maximumCount: number,
   prioritizedIds: ReadonlySet<string>,
+  freshness: ReadonlyMap<string, number>,
   random: () => number,
 ) {
   const ranked = photos.map((photo) => ({
     photo,
     usage: history.get(photo.id) ?? { shown: 0, lastShown: Number.NEGATIVE_INFINITY },
-    jitter: random(),
+    jitter: random() - (freshness.get(photo.id) ?? 0.5) * 0.2,
   })).sort((left, right) => (
     left.usage.shown - right.usage.shown
     || left.usage.lastShown - right.usage.lastShown
@@ -301,7 +323,8 @@ export function createSmartMosaic<T extends LayoutPhoto>(
   const minimumCount = photos.length === 1 ? 1 : Math.max(2, targetCount - 2);
   const maximumCount = Math.min(photos.length, MAX_PHOTOS_PER_SLIDE, targetCount + 1);
   const counts = Array.from({ length: maximumCount - minimumCount + 1 }, (_, index) => minimumCount + index);
-  const pool = orderedFairPool(photos, history, maximumCount, prioritizedIds, random);
+  const freshness = freshnessRanks(photos);
+  const pool = orderedFairPool(photos, history, maximumCount, prioritizedIds, freshness, random);
   const minimumShown = Math.min(...photos.map((photo) => history.get(photo.id)?.shown ?? 0));
   const trialCount = photos.length <= 10 ? 240 : 440;
   let best: MosaicLayout<T> | null = null;
@@ -313,7 +336,7 @@ export function createSmartMosaic<T extends LayoutPhoto>(
     const deterministicPriorities = prioritizedPool.slice(0, Math.max(1, count - 1));
     const selected = trial < counts.length
       ? [...deterministicPriorities, ...regularPool].slice(0, count)
-      : weightedSelection(pool, count, history, slideNumber, prioritizedIds, random);
+      : weightedSelection(pool, count, history, slideNumber, prioritizedIds, freshness, random);
     const arranged = bestArrangementForOrder(shuffled(selected, random), viewport, prioritizedIds);
     const promotedOverlap = arranged.tiles.reduce((sum, tile) => (
       sum + Number(previousIds.has(tile.photo.id) && prioritizedIds.has(tile.photo.id))

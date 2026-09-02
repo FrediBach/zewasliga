@@ -1,7 +1,7 @@
 import { ChangeEvent, CSSProperties, useCallback, useEffect, useRef, useState } from "react";
 import { arrangePhotos, createSmartMosaic, MosaicLayout, PhotoUsage, smallTilePriorities, Viewport } from "./layout";
 
-type Photo = { id: string; name: string; url: string; width: number; height: number };
+type Photo = { id: string; name: string; url: string; width: number; height: number; lastModified: number };
 type DirectoryPickerHandle = FileSystemDirectoryHandle & {
   values(): AsyncIterableIterator<FileSystemFileHandle | FileSystemDirectoryHandle>;
 };
@@ -24,7 +24,7 @@ async function photosFromFiles(files: File[]) {
   return Promise.all(supported.map(async (file, index) => {
     const url = URL.createObjectURL(file);
     const dimensions = await getDimensions(url);
-    return { id: `${file.name}-${file.lastModified}-${index}`, name: file.name.replace(/\.[^.]+$/, ""), url, ...dimensions };
+    return { id: `${file.name}-${file.lastModified}-${index}`, name: file.name.replace(/\.[^.]+$/, ""), url, lastModified: file.lastModified, ...dimensions };
   }));
 }
 
