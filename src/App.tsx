@@ -40,6 +40,10 @@ async function collectImages(handle: DirectoryPickerHandle): Promise<File[]> {
 }
 
 type GalleryFrame = { layout: MosaicLayout<Photo>; key: number; prioritizedIds: Set<string> };
+type DetailLens = { photo: Photo; pointerX: number; pointerY: number; tile: DOMRect };
+
+const DETAIL_LENS_SIZE = 210;
+const DETAIL_LENS_ZOOM = 2.25;
 
 function currentViewport(): Viewport {
   if (typeof window === "undefined") return { width: 1280, height: 720 };
@@ -68,6 +72,8 @@ export default function Home() {
   const [intervalMs, setIntervalMs] = useState(5000);
   const [showChrome, setShowChrome] = useState(true);
   const [message, setMessage] = useState("");
+  const [shiftHeld, setShiftHeld] = useState(false);
+  const [detailLens, setDetailLens] = useState<DetailLens | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
   const durationPieRef = useRef<HTMLSpanElement>(null);
@@ -83,6 +89,8 @@ export default function Home() {
   const advanceTimerRef = useRef<number | null>(null);
   const advanceDeadlineRef = useRef(0);
   const countdownDurationRef = useRef(intervalMs);
+  const hoveredTileRef = useRef<{ element: HTMLElement; photo: Photo } | null>(null);
+  const pointerRef = useRef({ x: 0, y: 0 });
 
   const advance = useCallback(() => {
     if (!photosRef.current.length) return;
@@ -216,6 +224,39 @@ export default function Home() {
     advanceTimerRef.current = window.setTimeout(advance, extendedDelay);
   }, [advance, intervalMs, paused]);
 
+  const showDetailLens = useCallback((element: HTMLElement, photo: Photo, pointerX: number, pointerY: number) => {
+    setDetailLens({ photo, pointerX, pointerY, tile: element.getBoundingClientRect() });
+  }, []);
+
+  useEffect(() => {
+    const handleShiftDown = (event: KeyboardEvent) => {
+      if (event.key !== "Shift" || event.repeat) return;
+      setShiftHeld(true);
+      const hovered = hoveredTileRef.current;
+      if (hovered) showDetailLens(hovered.element, hovered.photo, pointerRef.current.x, pointerRef.current.y);
+    };
+    const hideDetailLens = () => {
+      setShiftHeld(false);
+      setDetailLens(null);
+    };
+    const handleShiftUp = (event: KeyboardEvent) => {
+      if (event.key === "Shift") hideDetailLens();
+    };
+    window.addEventListener("keydown", handleShiftDown);
+    window.addEventListener("keyup", handleShiftUp);
+    window.addEventListener("blur", hideDetailLens);
+    return () => {
+      window.removeEventListener("keydown", handleShiftDown);
+      window.removeEventListener("keyup", handleShiftUp);
+      window.removeEventListener("blur", hideDetailLens);
+    };
+  }, [showDetailLens]);
+
+  useEffect(() => {
+    hoveredTileRef.current = null;
+    setDetailLens(null);
+  }, [frame?.key]);
+
   useEffect(() => {
     if (paused || photos.length === 0) return;
     let animationFrame = 0;
@@ -308,6 +349,19 @@ export default function Home() {
               className="tile"
               key={`${tile.photo.id}-${frame.key}`}
               onClick={() => promoteOnNextSlide(tile.photo.id)}
+              onPointerEnter={(event) => {
+                hoveredTileRef.current = { element: event.currentTarget, photo: tile.photo };
+                pointerRef.current = { x: event.clientX, y: event.clientY };
+                if (shiftHeld) showDetailLens(event.currentTarget, tile.photo, event.clientX, event.clientY);
+              }}
+              onPointerMove={(event) => {
+                pointerRef.current = { x: event.clientX, y: event.clientY };
+                if (shiftHeld) showDetailLens(event.currentTarget, tile.photo, event.clientX, event.clientY);
+              }}
+              onPointerLeave={() => {
+                hoveredTileRef.current = null;
+                setDetailLens(null);
+              }}
               aria-label={`Show ${tile.photo.name} large on the next slide`}
               style={{
                 "--tile-x": `${tile.x * 100}%`,
@@ -364,6 +418,26 @@ export default function Home() {
           aria-valuenow={paused ? undefined : 100}
           title={paused ? "Slide timer paused" : "Slide time remaining"}
         />
+      )}
+      {shiftHeld && detailLens && (
+        <div
+          className="detail-lens"
+          aria-hidden="true"
+          style={{ left: detailLens.pointerX, top: detailLens.pointerY }}
+        >
+          <img
+            src={detailLens.photo.url}
+            alt=""
+            style={{
+              left: detailLens.tile.left - detailLens.pointerX + DETAIL_LENS_SIZE / 2,
+              top: detailLens.tile.top - detailLens.pointerY + DETAIL_LENS_SIZE / 2,
+              width: detailLens.tile.width,
+              height: detailLens.tile.height,
+              transform: `scale(${DETAIL_LENS_ZOOM})`,
+              transformOrigin: `${detailLens.pointerX - detailLens.tile.left}px ${detailLens.pointerY - detailLens.tile.top}px`,
+            }}
+          />
+        </div>
       )}
       {message && photos.length > 0 && <div className="toast" role="alert">{message}</div>}
       <input ref={inputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" multiple onChange={handleFallback} {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} />

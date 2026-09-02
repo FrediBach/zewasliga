@@ -44,3 +44,12 @@ test("clicking a tile promotes it on the next slide", async () => {
   assert.match(page, /requestedPriorityId[\s\S]*new Set\(\[requestedPriorityId\]\)/);
   assert.match(page, /Show \$\{tile\.photo\.name\} large on the next slide/);
 });
+
+test("holding Shift shows a detail loupe at the pointer", async () => {
+  const [page, styles] = await Promise.all([readFile(pageUrl, "utf8"), readFile(stylesUrl, "utf8")]);
+  assert.match(page, /event\.key !== "Shift"/);
+  assert.match(page, /showDetailLens\(event\.currentTarget, tile\.photo, event\.clientX, event\.clientY\)/);
+  assert.match(page, /DETAIL_LENS_ZOOM/);
+  assert.match(styles, /\.detail-lens \{[^}]*position:fixed[^}]*border-radius:50%/);
+  assert.match(styles, /\.detail-lens \{[^}]*pointer-events:none/);
+});
