@@ -46,6 +46,21 @@ function currentViewport(): Viewport {
   return { width: Math.max(1, window.innerWidth), height: Math.max(1, window.innerHeight) };
 }
 
+function imageMotion(photoId: string, frameKey: number, area: number, durationMs: number) {
+  let hash = 2166136261;
+  for (const character of `${photoId}-${frameKey}`) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  const scale = 1 + Math.min(0.055, 0.01 + Math.sqrt(Math.max(0, area)) * 0.045);
+  const zoomsIn = (hash >>> 0) % 2 === 0;
+  return {
+    "--zoom-from": zoomsIn ? "1" : String(scale),
+    "--zoom-to": zoomsIn ? String(scale) : "1",
+    "--zoom-duration": `${durationMs}ms`,
+  };
+}
+
 export default function Home() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [frame, setFrame] = useState<GalleryFrame | null>(null);
@@ -271,7 +286,7 @@ export default function Home() {
   };
 
   return (
-    <main ref={shellRef} className={`app-shell ${photos.length ? "is-playing" : ""}`} onPointerMove={wakeChrome}>
+    <main ref={shellRef} className={`app-shell ${photos.length ? "is-playing" : ""} ${paused ? "is-paused" : ""}`} onPointerMove={wakeChrome}>
       <div className="ambient" aria-hidden="true" />
       {photos.length ? (
         <section className="mosaic" aria-label="Photo slideshow">
@@ -284,6 +299,7 @@ export default function Home() {
                 "--tile-y": `${tile.y * 100}%`,
                 "--tile-width": `${tile.width * 100}%`,
                 "--tile-height": `${tile.height * 100}%`,
+                ...imageMotion(tile.photo.id, frame.key, tile.width * tile.height, intervalMs),
               } as CSSProperties}
             >
               <img src={tile.photo.url} alt={tile.photo.name} draggable={false} />

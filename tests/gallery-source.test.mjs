@@ -28,3 +28,12 @@ test("slide countdown stays fixed in the bottom-right corner", async () => {
   assert.match(styles, /\.duration-pie \{[^}]*position:fixed/);
   assert.match(styles, /\.duration-pie \{[^}]*right:24px;[^}]*bottom:24px/);
 });
+
+test("slide images receive subtle size-aware zoom motion", async () => {
+  const [page, styles] = await Promise.all([readFile(pageUrl, "utf8"), readFile(stylesUrl, "utf8")]);
+  assert.match(page, /Math\.sqrt\(Math\.max\(0, area\)\)/);
+  assert.match(page, /Math\.min\(0\.055/);
+  assert.match(page, /zoomsIn/);
+  assert.match(styles, /@keyframes image-zoom/);
+  assert.match(styles, /\.is-paused \.tile img \{ animation-play-state:paused/);
+});
