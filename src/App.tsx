@@ -382,16 +382,37 @@ export default function Home() {
         </section>
       ) : (
         <section className="welcome">
-          <div className="eyebrow"><span /> LOCAL-ONLY SLIDESHOW</div>
-          <h1>Every photo<br />gets its space.</h1>
-          <p className="intro">Choose a folder. Zewasliga turns it into an ever-changing, edge-to-edge gallery—without uploading a single image.</p>
-          <button className="primary-action" onClick={chooseFolder}><span>Choose image folder</span><span aria-hidden="true">↗</span></button>
-          <p className="privacy-note"><span>●</span> Your images stay on this device</p>
-          {message && <p className="error-message" role="alert">{message}</p>}
-          <div className="demo-mosaic" aria-hidden="true">
-            <div className="demo-tile demo-a"><span>01</span></div>
-            <div className="demo-tile demo-b"><span>02</span></div>
-            <div className="demo-tile demo-c"><span>03</span></div>
+          <div className="welcome-copy">
+            <div className="eyebrow"><span /> YOUR FOLDER, FULL FRAME</div>
+            <h1>Every photo<br />gets <em>seen.</em></h1>
+            <p className="intro">Turn any image folder into a smart, ever-changing mosaic that fills the screen with less cropping—and gives every photo its moment.</p>
+            <div className="start-row">
+              <button className="primary-action" onClick={chooseFolder}><span>Choose image folder</span><span aria-hidden="true">↗</span></button>
+              <p className="privacy-note"><span>●</span> Stays on this device</p>
+            </div>
+            {message && <p className="error-message" role="alert">{message}</p>}
+          </div>
+
+          <div className="demo-stage" aria-hidden="true">
+            <div className="demo-toolbar">
+              <span><i /> SMART MIX 01</span>
+              <span>18 / 240 SEEN</span>
+            </div>
+            <div className="demo-mosaic">
+              <div className="demo-tile demo-a"><span>01</span></div>
+              <div className="demo-tile demo-b"><span>02</span></div>
+              <div className="demo-tile demo-c"><span>03</span></div>
+            </div>
+            <div className="demo-progress"><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /></div>
+            <div className="demo-callout"><b>CLICK</b><span>Show it larger next</span></div>
+            <div className="demo-lens"><span>SHIFT</span></div>
+          </div>
+
+          <div className="feature-strip" aria-label="Gallery features">
+            <div className="feature"><span className="feature-number">01</span><div><b>Fits the frame</b><small>Smart layouts minimize cropping.</small></div></div>
+            <div className="feature"><span className="feature-number">02</span><div><b>Fair rotation</b><small>Tracks views so no photo is forgotten.</small></div></div>
+            <div className="feature"><span className="feature-number">03</span><div><b>Direct the mix</b><small>Click a photo to feature it next.</small></div></div>
+            <div className="feature"><span className="feature-number">04</span><div><b>Inspect details</b><small>Hold Shift for a close-up lens.</small></div></div>
           </div>
         </section>
       )}

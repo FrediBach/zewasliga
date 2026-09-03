@@ -23,6 +23,16 @@ test("gallery does not retain starter preview code", async () => {
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview|react-loading-skeleton/);
 });
 
+test("start page stays viewport-contained and highlights the gallery behavior", async () => {
+  const [page, styles] = await Promise.all([readFile(pageUrl, "utf8"), readFile(stylesUrl, "utf8")]);
+  assert.match(styles, /\.app-shell \{[^}]*height:100svh[^}]*overflow:hidden/);
+  assert.match(styles, /\.welcome \{[^}]*height:100%[^}]*overflow:hidden/);
+  assert.match(page, /Fits the frame/);
+  assert.match(page, /Fair rotation/);
+  assert.match(page, /Direct the mix/);
+  assert.match(page, /Inspect details/);
+});
+
 test("slide countdown stays fixed in the bottom-right corner", async () => {
   const styles = await readFile(stylesUrl, "utf8");
   assert.match(styles, /\.duration-pie \{[^}]*position:fixed/);
