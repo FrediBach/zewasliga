@@ -39,6 +39,15 @@ test("slide countdown stays fixed in the bottom-right corner", async () => {
   assert.match(styles, /\.duration-pie \{[^}]*right:24px;[^}]*bottom:24px/);
 });
 
+test("the bottom-left help control reveals every keyboard shortcut", async () => {
+  const [page, styles] = await Promise.all([readFile(pageUrl, "utf8"), readFile(stylesUrl, "utf8")]);
+  assert.match(page, /className="shortcut-help-button"/);
+  assert.match(page, /Keyboard shortcuts/);
+  for (const shortcut of ["Space", "Enter", "Shift", "Fullscreen", "Choose another folder"]) assert.match(page, new RegExp(shortcut, "i"));
+  assert.match(styles, /\.shortcut-help \{[^}]*position:fixed[^}]*left:24px;[^}]*bottom:24px/);
+  assert.match(styles, /\.shortcut-help:hover \.shortcut-help-panel,\.shortcut-help:focus-within \.shortcut-help-panel/);
+});
+
 test("slide images receive subtle size-aware zoom motion", async () => {
   const [page, styles] = await Promise.all([readFile(pageUrl, "utf8"), readFile(stylesUrl, "utf8")]);
   assert.match(page, /Math\.sqrt\(Math\.max\(0, area\)\)/);

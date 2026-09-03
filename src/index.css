@@ -91,6 +91,18 @@ h1 em { font-style:normal; color:transparent; -webkit-text-stroke:2px var(--ink)
 .duration-pie { --remaining:100%; position:fixed; z-index:31; right:24px; bottom:24px; width:36px; height:36px; border:1px solid rgba(255,255,255,.5); border-radius:50%; background:rgba(17,17,15,.76); backdrop-filter:blur(14px); box-shadow:0 8px 28px rgba(0,0,0,.3); }
 .duration-pie::before { content:""; position:absolute; inset:4px; border-radius:50%; background:conic-gradient(from -90deg,var(--acid) var(--remaining),rgba(255,255,255,.12) 0); }
 .duration-pie.paused::after { content:""; position:absolute; inset:11px 9px; border-left:2px solid white; border-right:2px solid white; opacity:.9; }
+.shortcut-help { position:fixed; z-index:32; left:24px; bottom:24px; }
+.shortcut-help-button { width:30px; height:30px; display:grid; place-items:center; padding:0; border:1px solid rgba(255,255,255,.48); border-radius:50%; background:rgba(17,17,15,.68); color:white; font:700 14px/1 Arial,sans-serif; cursor:help; backdrop-filter:blur(14px); box-shadow:0 8px 28px rgba(0,0,0,.24); }
+.shortcut-help-button:focus-visible { outline:3px solid var(--acid); outline-offset:3px; }
+.shortcut-help-panel { position:absolute; left:0; bottom:calc(100% + 10px); width:270px; padding:16px; border:1px solid rgba(255,255,255,.2); border-radius:14px; background:rgba(17,17,15,.92); color:white; box-shadow:0 16px 48px rgba(0,0,0,.38); backdrop-filter:blur(18px); opacity:0; visibility:hidden; transform:translateY(6px); pointer-events:none; transition:opacity .18s ease,transform .18s ease,visibility .18s; }
+.shortcut-help:hover .shortcut-help-panel,.shortcut-help:focus-within .shortcut-help-panel { opacity:1; visibility:visible; transform:translateY(0); }
+.shortcut-help-panel strong { display:block; margin-bottom:11px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
+.shortcut-help-panel dl { display:grid; gap:8px; margin:0; }
+.shortcut-help-panel dl div { display:grid; grid-template-columns:104px 1fr; align-items:center; gap:8px; }
+.shortcut-help-panel dt,.shortcut-help-panel dd { margin:0; }
+.shortcut-help-panel dt { white-space:nowrap; }
+.shortcut-help-panel dd { color:rgba(255,255,255,.68); font-size:11px; line-height:1.25; }
+.shortcut-help-panel kbd { display:inline-block; min-width:22px; padding:3px 5px; border:1px solid rgba(255,255,255,.28); border-bottom-color:rgba(255,255,255,.5); border-radius:5px; background:rgba(255,255,255,.1); color:white; font:600 10px/1 monospace; text-align:center; }
 .detail-lens { position:fixed; z-index:50; width:210px; height:210px; overflow:hidden; border:3px solid rgba(255,255,255,.92); border-radius:50%; background:#171814; box-shadow:0 14px 48px rgba(0,0,0,.42),0 0 0 1px rgba(0,0,0,.35); pointer-events:none; transform:translate(-50%,-50%); }
 .detail-lens img { position:absolute; max-width:none; object-fit:cover; }
 .detail-lens::after { content:""; position:absolute; left:50%; top:50%; width:5px; height:5px; border:1px solid rgba(255,255,255,.8); border-radius:50%; transform:translate(-50%,-50%); box-shadow:0 1px 4px rgba(0,0,0,.7); }
@@ -132,6 +144,8 @@ h1 em { font-style:normal; color:transparent; -webkit-text-stroke:2px var(--ink)
   .feature-number { font-size:8px; }
   .control-dock { width:calc(100% - 24px); bottom:12px; justify-content:center; }
   .duration-pie { right:18px; bottom:82px; }
+  .shortcut-help { left:18px; bottom:82px; }
+  .shortcut-help-panel { width:min(270px,calc(100vw - 36px)); }
   .counter,.divider { display:none; }
   .next-button { flex:1; }
 }

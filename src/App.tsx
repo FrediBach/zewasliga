@@ -521,6 +521,23 @@ export default function Home() {
           title={timerPaused ? "Slide timer paused" : "Slide time remaining"}
         />
       )}
+      <div className="shortcut-help">
+        <button type="button" className="shortcut-help-button" aria-label="Show keyboard shortcuts" aria-describedby="keyboard-shortcuts">?</button>
+        <div id="keyboard-shortcuts" className="shortcut-help-panel" role="tooltip">
+          <strong>Keyboard shortcuts</strong>
+          <dl>
+            <div><dt><kbd>Space</kbd> / <kbd>K</kbd></dt><dd>Pause or play</dd></div>
+            <div><dt><kbd>←</kbd></dt><dd>Previous mix</dd></div>
+            <div><dt><kbd>→</kbd> / <kbd>↓</kbd></dt><dd>Next mix</dd></div>
+            <div><dt><kbd>↑</kbd></dt><dd>Hold this mix longer</dd></div>
+            <div><dt><kbd>Enter</kbd></dt><dd>Love hovered photo</dd></div>
+            <div><dt><kbd>Shift</kbd></dt><dd>Inspect hovered photo</dd></div>
+            <div><dt><kbd>Shift</kbd> + <kbd>+</kbd></dt><dd>Zoom in further</dd></div>
+            <div><dt><kbd>F</kbd></dt><dd>Toggle fullscreen</dd></div>
+            <div><dt><kbd>O</kbd></dt><dd>Choose another folder</dd></div>
+          </dl>
+        </div>
+      </div>
       {shiftHeld && detailLens && (
         <div
           className="detail-lens"
