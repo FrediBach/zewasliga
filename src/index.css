@@ -69,6 +69,7 @@ h1 em { font-style:normal; color:transparent; -webkit-text-stroke:2px var(--ink)
 .tile img { width:100%; height:100%; display:block; object-fit:cover; transform:scale(var(--zoom-from)); animation:image-zoom var(--zoom-duration) linear both; will-change:transform; }
 .is-paused .tile img { animation-play-state:paused; }
 .tile-caption { position:absolute; left:15px; bottom:13px; color:white; font:600 10px/1 Arial,sans-serif; letter-spacing:.12em; text-transform:uppercase; opacity:0; text-shadow:0 1px 7px black; transition:opacity .2s; }
+.tile-love { position:absolute; z-index:2; top:10px; right:10px; width:22px; height:22px; display:grid; place-items:center; border-radius:50%; background:rgba(17,17,15,.66); color:#ff6174; font:700 12px/1 Arial,sans-serif; text-shadow:0 1px 5px rgba(0,0,0,.5); backdrop-filter:blur(8px); }
 .tile:hover .tile-caption,.tile:focus-visible .tile-caption { opacity:.9; }
 .tile:focus-visible { outline:3px solid var(--acid); outline-offset:-3px; }
 

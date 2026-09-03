@@ -77,6 +77,7 @@ export default function Home() {
   const [shiftHeld, setShiftHeld] = useState(false);
   const [detailLens, setDetailLens] = useState<DetailLens | null>(null);
   const [detailLensZoom, setDetailLensZoom] = useState(DETAIL_LENS_ZOOM);
+  const [lovedIds, setLovedIds] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
   const durationPieRef = useRef<HTMLSpanElement>(null);
@@ -84,6 +85,7 @@ export default function Home() {
   const frameRef = useRef<GalleryFrame | null>(null);
   const viewportRef = useRef<Viewport>(currentViewport());
   const historyRef = useRef<Map<string, PhotoUsage>>(new Map());
+  const lovedIdsRef = useRef<Set<string>>(new Set());
   const slideNumberRef = useRef(0);
   const frameHistoryRef = useRef<GalleryFrame[]>([]);
   const frameIndexRef = useRef(-1);
@@ -128,6 +130,7 @@ export default function Home() {
       previousIds,
       prioritizedIds,
       slideNumberRef.current,
+      lovedIdsRef.current,
     );
     if (!layout) return;
 
@@ -169,12 +172,14 @@ export default function Home() {
     photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.url));
     photosRef.current = nextPhotos;
     historyRef.current = new Map();
+    lovedIdsRef.current = new Set();
     slideNumberRef.current = 0;
     frameHistoryRef.current = [];
     frameIndexRef.current = -1;
     requestedPriorityRef.current = null;
     frameRef.current = null;
     setPhotos(nextPhotos);
+    setLovedIds(new Set());
     const layout = createSmartMosaic(nextPhotos, viewportRef.current, historyRef.current, new Set(), new Set(), 0);
     if (layout) {
       layout.tiles.forEach(({ photo }) => historyRef.current.set(photo.id, { shown: 1, lastShown: 1 }));
@@ -258,6 +263,16 @@ export default function Home() {
     setDetailLens({ photo, pointerX, pointerY, tile: element.getBoundingClientRect() });
   }, []);
 
+  const toggleLoved = useCallback((photoId: string) => {
+    setLovedIds((current) => {
+      const next = new Set(current);
+      if (next.has(photoId)) next.delete(photoId);
+      else next.add(photoId);
+      lovedIdsRef.current = next;
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     const handleShiftDown = (event: KeyboardEvent) => {
       if ((event.key === "+" || event.code === "NumpadAdd") && detailLensActiveRef.current) {
@@ -317,7 +332,11 @@ export default function Home() {
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) return;
       if (!photosRef.current.length && event.key.toLowerCase() !== "o") return;
-      if (event.key === " " || event.key.toLowerCase() === "k") { event.preventDefault(); setPaused((value) => !value); }
+      if (event.key === "Enter" && hoveredTileRef.current) {
+        event.preventDefault();
+        if (!event.repeat) toggleLoved(hoveredTileRef.current.photo.id);
+      }
+      else if (event.key === " " || event.key.toLowerCase() === "k") { event.preventDefault(); setPaused((value) => !value); }
       else if (event.key === "ArrowLeft") { event.preventDefault(); goBack(); }
       else if (event.key === "ArrowRight" || event.key === "ArrowDown") { event.preventDefault(); advance(); }
       else if (event.key === "ArrowUp") { event.preventDefault(); if (!event.repeat) holdCurrentSlide(); }
@@ -326,7 +345,7 @@ export default function Home() {
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [advance, chooseFolder, goBack, holdCurrentSlide]);
+  }, [advance, chooseFolder, goBack, holdCurrentSlide, toggleLoved]);
 
   useEffect(() => {
     let animationFrame = 0;
@@ -403,7 +422,7 @@ export default function Home() {
                 setDetailLens(null);
                 setDetailLensZoom(DETAIL_LENS_ZOOM);
               }}
-              aria-label={`Show ${tile.photo.name} large on the next slide`}
+              aria-label={`Show ${tile.photo.name} large on the next slide. ${lovedIds.has(tile.photo.id) ? "Loved; press Enter to unlove" : "Press Enter to love"}`}
               style={{
                 "--tile-x": `${tile.x * 100}%`,
                 "--tile-y": `${tile.y * 100}%`,
@@ -413,6 +432,7 @@ export default function Home() {
               } as CSSProperties}
             >
               <img src={tile.photo.url} alt="" draggable={false} />
+              {lovedIds.has(tile.photo.id) && <span className="tile-love" aria-hidden="true">♥</span>}
               <span className="tile-caption" aria-hidden="true">{tile.photo.name}</span>
             </button>
           ))}

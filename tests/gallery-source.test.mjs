@@ -55,6 +55,16 @@ test("clicking a tile promotes it on the next slide", async () => {
   assert.match(page, /Show \$\{tile\.photo\.name\} large on the next slide/);
 });
 
+test("Enter toggles a loved image under the pointer and loved tiles show a heart", async () => {
+  const [page, styles] = await Promise.all([readFile(pageUrl, "utf8"), readFile(stylesUrl, "utf8")]);
+  assert.match(page, /event\.key === "Enter" && hoveredTileRef\.current/);
+  assert.match(page, /if \(!event\.repeat\) toggleLoved/);
+  assert.match(page, /toggleLoved\(hoveredTileRef\.current\.photo\.id\)/);
+  assert.match(page, /lovedIdsRef\.current/);
+  assert.match(page, /className="tile-love"/);
+  assert.match(styles, /\.tile-love \{[^}]*top:10px;[^}]*right:10px/);
+});
+
 test("holding Shift shows a detail loupe at the pointer", async () => {
   const [page, styles] = await Promise.all([readFile(pageUrl, "utf8"), readFile(stylesUrl, "utf8")]);
   assert.match(page, /event\.key !== "Shift"/);

@@ -210,17 +210,19 @@ function weightedSelection<T extends LayoutPhoto>(
   history: ReadonlyMap<string, PhotoUsage>,
   slideNumber: number,
   prioritizedIds: ReadonlySet<string>,
+  requiredIds: ReadonlySet<string>,
   freshness: ReadonlyMap<string, number>,
   random: () => number,
 ) {
   const available = [...pool];
-  const maximumPriorities = Math.max(1, count - 1);
+  const required = shuffled(available.filter((photo) => requiredIds.has(photo.id)), random).slice(0, 1);
+  const maximumPriorities = Math.max(0, count - 1 - required.length);
   const prioritized = shuffled(available.filter((photo) => prioritizedIds.has(photo.id)), random)
     .slice(0, maximumPriorities);
-  const selected: T[] = [...prioritized];
-  const prioritizedSelectionIds = new Set(prioritized.map((photo) => photo.id));
+  const selected: T[] = [...required, ...prioritized];
+  const selectedIds = new Set(selected.map((photo) => photo.id));
   for (let index = available.length - 1; index >= 0; index -= 1) {
-    if (prioritizedSelectionIds.has(available[index].id)) available.splice(index, 1);
+    if (selectedIds.has(available[index].id)) available.splice(index, 1);
   }
   while (selected.length < count && available.length) {
     const weights = available.map((photo) => {
@@ -244,6 +246,37 @@ function weightedSelection<T extends LayoutPhoto>(
     selected.push(available.splice(choice, 1)[0]);
   }
   return selected;
+}
+
+function chooseLovedReplay<T extends LayoutPhoto>(
+  photos: readonly T[],
+  history: ReadonlyMap<string, PhotoUsage>,
+  previousIds: ReadonlySet<string>,
+  lovedIds: ReadonlySet<string>,
+  slideNumber: number,
+  random: () => number,
+) {
+  const hasUnseenPhotos = photos.some((photo) => !history.has(photo.id));
+  const replayChance = hasUnseenPhotos ? 0.24 : 0.34;
+  if (random() >= replayChance) return null;
+
+  const eligible = photos.filter((photo) => {
+    const usage = history.get(photo.id);
+    return lovedIds.has(photo.id) && usage && !previousIds.has(photo.id);
+  });
+  if (!eligible.length) return null;
+
+  const weights = eligible.map((photo) => {
+    const usage = history.get(photo.id) as PhotoUsage;
+    return Math.max(1, slideNumber - usage.lastShown) / (1 + usage.shown * 0.35);
+  });
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  let cursor = clamp(random(), 0, 0.999999999) * total;
+  for (let index = 0; index < eligible.length; index += 1) {
+    cursor -= weights[index];
+    if (cursor <= 0) return eligible[index];
+  }
+  return eligible[eligible.length - 1];
 }
 
 function orderedFairPool<T extends LayoutPhoto>(
@@ -315,6 +348,7 @@ export function createSmartMosaic<T extends LayoutPhoto>(
   previousIds: ReadonlySet<string>,
   prioritizedIds: ReadonlySet<string>,
   slideNumber: number,
+  lovedIds: ReadonlySet<string> = new Set(),
   random: () => number = Math.random,
 ) {
   if (!photos.length) return null;
@@ -325,6 +359,9 @@ export function createSmartMosaic<T extends LayoutPhoto>(
   const counts = Array.from({ length: maximumCount - minimumCount + 1 }, (_, index) => minimumCount + index);
   const freshness = freshnessRanks(photos);
   const pool = orderedFairPool(photos, history, maximumCount, prioritizedIds, freshness, random);
+  const lovedReplay = chooseLovedReplay(photos, history, previousIds, lovedIds, slideNumber, random);
+  if (lovedReplay && !pool.some((photo) => photo.id === lovedReplay.id)) pool.push(lovedReplay);
+  const lovedReplayIds = new Set(lovedReplay ? [lovedReplay.id] : []);
   const minimumShown = Math.min(...photos.map((photo) => history.get(photo.id)?.shown ?? 0));
   const trialCount = photos.length <= 10 ? 240 : 440;
   let best: MosaicLayout<T> | null = null;
@@ -332,11 +369,12 @@ export function createSmartMosaic<T extends LayoutPhoto>(
   for (let trial = 0; trial < trialCount; trial += 1) {
     const count = counts[trial % counts.length];
     const prioritizedPool = pool.filter((photo) => prioritizedIds.has(photo.id));
-    const regularPool = pool.filter((photo) => !prioritizedIds.has(photo.id));
-    const deterministicPriorities = prioritizedPool.slice(0, Math.max(1, count - 1));
+    const deterministicPriorities = prioritizedPool.slice(0, Math.max(0, count - 1 - lovedReplayIds.size));
+    const fixedIds = new Set([...lovedReplayIds, ...deterministicPriorities.map((photo) => photo.id)]);
+    const regularPool = pool.filter((photo) => !fixedIds.has(photo.id));
     const selected = trial < counts.length
-      ? [...deterministicPriorities, ...regularPool].slice(0, count)
-      : weightedSelection(pool, count, history, slideNumber, prioritizedIds, freshness, random);
+      ? [...(lovedReplay ? [lovedReplay] : []), ...deterministicPriorities, ...regularPool].slice(0, count)
+      : weightedSelection(pool, count, history, slideNumber, prioritizedIds, lovedReplayIds, freshness, random);
     const arranged = bestArrangementForOrder(shuffled(selected, random), viewport, prioritizedIds);
     const promotedOverlap = arranged.tiles.reduce((sum, tile) => (
       sum + Number(previousIds.has(tile.photo.id) && prioritizedIds.has(tile.photo.id))

@@ -36,7 +36,7 @@ function assertExactCoverage(layout) {
 }
 
 test("smart mosaic covers a landscape viewport with very little crop", () => {
-  const layout = createSmartMosaic(photos, { width: 1920, height: 1080 }, new Map(), new Set(), new Set(), 0, seededRandom(42));
+  const layout = createSmartMosaic(photos, { width: 1920, height: 1080 }, new Map(), new Set(), new Set(), 0, new Set(), seededRandom(42));
   assert.ok(layout);
   assertExactCoverage(layout);
   assert.ok(layout.crop < 0.02, `expected less than 2% average crop; received ${layout.crop}`);
@@ -72,7 +72,7 @@ test("small tiles are carried into a large slot on the next slide", () => {
     { id: "new-c", width: 1500, height: 1000 },
     { id: "new-d", width: 1000, height: 1500 },
   ];
-  const layout = createSmartMosaic(morePhotos, { width: 1920, height: 1080 }, new Map(), previousIds, priorities, 1, seededRandom(126));
+  const layout = createSmartMosaic(morePhotos, { width: 1920, height: 1080 }, new Map(), previousIds, priorities, 1, new Set(), seededRandom(126));
   assert.ok(layout);
   assert.equal(priorities.size, 2);
   const areas = layout.tiles.map((tile) => tile.width * tile.height).sort((left, right) => right - left);
@@ -96,7 +96,7 @@ test("newer photos get a slight early advantage without excluding older photos",
   let olderSelections = 0;
 
   for (let seed = 1; seed <= 24; seed += 1) {
-    const layout = createSmartMosaic(datedPhotos, { width: 1280, height: 720 }, new Map(), new Set(), new Set(), 0, seededRandom(seed));
+    const layout = createSmartMosaic(datedPhotos, { width: 1280, height: 720 }, new Map(), new Set(), new Set(), 0, new Set(), seededRandom(seed));
     assert.ok(layout);
     for (const tile of layout.tiles) {
       if ((tile.photo.lastModified ?? 0) > 30) newerSelections += 1;
@@ -106,4 +106,24 @@ test("newer photos get a slight early advantage without excluding older photos",
 
   assert.ok(newerSelections > olderSelections, "newer photos should be selected somewhat more often at the start");
   assert.ok(olderSelections > 0, "older photos should still be able to appear on early slides");
+});
+
+test("loved photos sometimes replay before unseen photos are exhausted without taking over", () => {
+  const manyPhotos = Array.from({ length: 48 }, (_, index) => ({
+    id: `photo-${index}`,
+    width: index % 2 ? 1200 : 900,
+    height: index % 2 ? 900 : 1200,
+  }));
+  const history = new Map([["photo-0", { shown: 1, lastShown: 1 }]]);
+  const lovedIds = new Set(["photo-0"]);
+  let lovedReplays = 0;
+
+  for (let seed = 1; seed <= 40; seed += 1) {
+    const layout = createSmartMosaic(manyPhotos, { width: 1280, height: 720 }, history, new Set(), new Set(), 3, lovedIds, seededRandom(seed));
+    assert.ok(layout);
+    lovedReplays += Number(layout.tiles.some((tile) => tile.photo.id === "photo-0"));
+  }
+
+  assert.ok(lovedReplays >= 5, `expected a noticeable number of loved replays; received ${lovedReplays}`);
+  assert.ok(lovedReplays <= 15, `loved photos should not crowd out unseen photos; received ${lovedReplays}`);
 });
