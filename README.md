@@ -19,6 +19,7 @@ Open `http://localhost:3000`, choose a folder of JPG, PNG, WebP, AVIF, or GIF fi
 - `←` / `→`: show the previous or next mix
 - `↓`: dismiss the current mix and show the next one
 - `↑`: hold the current mix for one more selected duration
+- Hold `Shift` over a photo: inspect it with the detail lens and pause the slide countdown
 - `F`: toggle fullscreen
 - `O`: choose another folder
 

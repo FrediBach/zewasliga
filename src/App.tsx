@@ -88,13 +88,17 @@ export default function Home() {
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const advanceTimerRef = useRef<number | null>(null);
   const advanceDeadlineRef = useRef(0);
+  const advanceRemainingRef = useRef(intervalMs);
   const countdownDurationRef = useRef(intervalMs);
+  const timerContextRef = useRef<{ frameKey: number | null; intervalMs: number; photos: Photo[] } | null>(null);
+  const timerWasPausedRef = useRef(false);
   const hoveredTileRef = useRef<{ element: HTMLElement; photo: Photo } | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
   const nameOrderedPhotos = useMemo(() => [...photos].sort((left, right) => (
     left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
   )), [photos]);
   const viewedCount = photos.reduce((count, photo) => count + Number((historyRef.current.get(photo.id)?.shown ?? 0) > 0), 0);
+  const timerPaused = paused || detailLens !== null;
 
   const advance = useCallback(() => {
     if (!photosRef.current.length) return;
@@ -207,26 +211,43 @@ export default function Home() {
 
   useEffect(() => {
     if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
-    if (paused || photos.length === 0) return;
+    advanceTimerRef.current = null;
 
-    countdownDurationRef.current = intervalMs;
-    advanceDeadlineRef.current = Date.now() + intervalMs;
-    advanceTimerRef.current = window.setTimeout(advance, intervalMs);
+    const now = Date.now();
+    const previousContext = timerContextRef.current;
+    const contextChanged = previousContext?.frameKey !== (frame?.key ?? null)
+      || previousContext?.intervalMs !== intervalMs
+      || previousContext?.photos !== photos;
+
+    if (contextChanged) {
+      advanceRemainingRef.current = intervalMs;
+      countdownDurationRef.current = intervalMs;
+    } else if (timerPaused && !timerWasPausedRef.current) {
+      advanceRemainingRef.current = Math.max(0, advanceDeadlineRef.current - now);
+    }
+
+    timerContextRef.current = { frameKey: frame?.key ?? null, intervalMs, photos };
+    timerWasPausedRef.current = timerPaused;
+    if (timerPaused || photos.length === 0) return;
+
+    const delay = advanceRemainingRef.current;
+    advanceDeadlineRef.current = now + delay;
+    advanceTimerRef.current = window.setTimeout(advance, delay);
     return () => {
       if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = null;
     };
-  }, [advance, frame?.key, intervalMs, paused, photos]);
+  }, [advance, frame?.key, intervalMs, photos, timerPaused]);
 
   const holdCurrentSlide = useCallback(() => {
-    if (paused || !photosRef.current.length) return;
+    if (timerPaused || !photosRef.current.length) return;
     const remainingMs = Math.max(0, advanceDeadlineRef.current - Date.now());
     if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
     const extendedDelay = remainingMs + intervalMs;
     countdownDurationRef.current = extendedDelay;
     advanceDeadlineRef.current = Date.now() + extendedDelay;
     advanceTimerRef.current = window.setTimeout(advance, extendedDelay);
-  }, [advance, intervalMs, paused]);
+  }, [advance, intervalMs, timerPaused]);
 
   const showDetailLens = useCallback((element: HTMLElement, photo: Photo, pointerX: number, pointerY: number) => {
     setDetailLens({ photo, pointerX, pointerY, tile: element.getBoundingClientRect() });
@@ -262,7 +283,7 @@ export default function Home() {
   }, [frame?.key]);
 
   useEffect(() => {
-    if (paused || photos.length === 0) return;
+    if (timerPaused || photos.length === 0) return;
     let animationFrame = 0;
 
     const updatePie = () => {
@@ -275,7 +296,7 @@ export default function Home() {
 
     updatePie();
     return () => cancelAnimationFrame(animationFrame);
-  }, [frame?.key, intervalMs, paused, photos]);
+  }, [frame?.key, intervalMs, photos, timerPaused]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -455,13 +476,13 @@ export default function Home() {
       {photos.length > 0 && (
         <span
           ref={durationPieRef}
-          className={`duration-pie ${paused ? "paused" : ""}`}
+          className={`duration-pie ${timerPaused ? "paused" : ""}`}
           role="progressbar"
-          aria-label={paused ? "Slide timer paused" : "Slide time remaining"}
+          aria-label={timerPaused ? "Slide timer paused" : "Slide time remaining"}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuenow={paused ? undefined : 100}
-          title={paused ? "Slide timer paused" : "Slide time remaining"}
+          aria-valuenow={timerPaused ? undefined : 100}
+          title={timerPaused ? "Slide timer paused" : "Slide time remaining"}
         />
       )}
       {shiftHeld && detailLens && (
