@@ -60,6 +60,9 @@ test("holding Shift shows a detail loupe at the pointer", async () => {
   assert.match(page, /event\.key !== "Shift"/);
   assert.match(page, /showDetailLens\(event\.currentTarget, tile\.photo, event\.clientX, event\.clientY\)/);
   assert.match(page, /DETAIL_LENS_ZOOM/);
+  assert.match(page, /event\.key === "\+" \|\| event\.code === "NumpadAdd"/);
+  assert.match(page, /Math\.min\(DETAIL_LENS_MAX_ZOOM, zoom \+ DETAIL_LENS_ZOOM_STEP\)/);
+  assert.match(page, /transform: `scale\(\$\{detailLensZoom\}\)`/);
   assert.match(page, /timerPaused = paused \|\| detailLens !== null/);
   assert.match(page, /advanceRemainingRef\.current = Math\.max\(0, advanceDeadlineRef\.current - now\)/);
   assert.match(styles, /\.detail-lens \{[^}]*position:fixed[^}]*border-radius:50%/);

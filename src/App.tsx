@@ -44,6 +44,8 @@ type DetailLens = { photo: Photo; pointerX: number; pointerY: number; tile: DOMR
 
 const DETAIL_LENS_SIZE = 210;
 const DETAIL_LENS_ZOOM = 2.25;
+const DETAIL_LENS_ZOOM_STEP = 0.75;
+const DETAIL_LENS_MAX_ZOOM = 5.25;
 
 function currentViewport(): Viewport {
   if (typeof window === "undefined") return { width: 1280, height: 720 };
@@ -74,6 +76,7 @@ export default function Home() {
   const [message, setMessage] = useState("");
   const [shiftHeld, setShiftHeld] = useState(false);
   const [detailLens, setDetailLens] = useState<DetailLens | null>(null);
+  const [detailLensZoom, setDetailLensZoom] = useState(DETAIL_LENS_ZOOM);
   const inputRef = useRef<HTMLInputElement>(null);
   const shellRef = useRef<HTMLElement>(null);
   const durationPieRef = useRef<HTMLSpanElement>(null);
@@ -92,6 +95,7 @@ export default function Home() {
   const countdownDurationRef = useRef(intervalMs);
   const timerContextRef = useRef<{ frameKey: number | null; intervalMs: number; photos: Photo[] } | null>(null);
   const timerWasPausedRef = useRef(false);
+  const detailLensActiveRef = useRef(false);
   const hoveredTileRef = useRef<{ element: HTMLElement; photo: Photo } | null>(null);
   const pointerRef = useRef({ x: 0, y: 0 });
   const nameOrderedPhotos = useMemo(() => [...photos].sort((left, right) => (
@@ -250,11 +254,17 @@ export default function Home() {
   }, [advance, intervalMs, timerPaused]);
 
   const showDetailLens = useCallback((element: HTMLElement, photo: Photo, pointerX: number, pointerY: number) => {
+    detailLensActiveRef.current = true;
     setDetailLens({ photo, pointerX, pointerY, tile: element.getBoundingClientRect() });
   }, []);
 
   useEffect(() => {
     const handleShiftDown = (event: KeyboardEvent) => {
+      if ((event.key === "+" || event.code === "NumpadAdd") && detailLensActiveRef.current) {
+        event.preventDefault();
+        if (!event.repeat) setDetailLensZoom((zoom) => Math.min(DETAIL_LENS_MAX_ZOOM, zoom + DETAIL_LENS_ZOOM_STEP));
+        return;
+      }
       if (event.key !== "Shift" || event.repeat) return;
       setShiftHeld(true);
       const hovered = hoveredTileRef.current;
@@ -262,7 +272,9 @@ export default function Home() {
     };
     const hideDetailLens = () => {
       setShiftHeld(false);
+      detailLensActiveRef.current = false;
       setDetailLens(null);
+      setDetailLensZoom(DETAIL_LENS_ZOOM);
     };
     const handleShiftUp = (event: KeyboardEvent) => {
       if (event.key === "Shift") hideDetailLens();
@@ -279,7 +291,9 @@ export default function Home() {
 
   useEffect(() => {
     hoveredTileRef.current = null;
+    detailLensActiveRef.current = false;
     setDetailLens(null);
+    setDetailLensZoom(DETAIL_LENS_ZOOM);
   }, [frame?.key]);
 
   useEffect(() => {
@@ -385,7 +399,9 @@ export default function Home() {
               }}
               onPointerLeave={() => {
                 hoveredTileRef.current = null;
+                detailLensActiveRef.current = false;
                 setDetailLens(null);
+                setDetailLensZoom(DETAIL_LENS_ZOOM);
               }}
               aria-label={`Show ${tile.photo.name} large on the next slide`}
               style={{
@@ -499,7 +515,7 @@ export default function Home() {
               top: detailLens.tile.top - detailLens.pointerY + DETAIL_LENS_SIZE / 2,
               width: detailLens.tile.width,
               height: detailLens.tile.height,
-              transform: `scale(${DETAIL_LENS_ZOOM})`,
+              transform: `scale(${detailLensZoom})`,
               transformOrigin: `${detailLens.pointerX - detailLens.tile.left}px ${detailLens.pointerY - detailLens.tile.top}px`,
             }}
           />
