@@ -12,7 +12,15 @@ button:focus-visible,a:focus-visible,select:focus-visible { outline:2px solid va
 .brand { color:inherit; text-decoration:none; font-size:23px; letter-spacing:-.06em; }
 .top-note,.eyebrow,.features-heading { font:400 11px/1.5 var(--mono); letter-spacing:.1em; color:var(--muted); }
 .welcome { width:min(100%,1264px); height:100%; overflow:auto; margin:auto; display:flex; flex-direction:column; padding:clamp(120px,17vh,180px) 32px 56px; }
-.welcome-copy { margin-bottom:auto; padding-bottom:48px; }
+.welcome-intro { display:grid; grid-template-columns:minmax(0,1fr) 272px; gap:48px; align-items:start; flex-shrink:0; margin-bottom:auto; padding-bottom:48px; }
+.welcome-copy { min-width:0; }
+.welcome-shortcuts { padding-top:1px; color:var(--muted); }
+.welcome-shortcuts h2 { margin:0 0 14px; padding-bottom:14px; border-bottom:1px solid var(--line); font:400 10px/1.5 var(--mono); letter-spacing:.1em; text-transform:uppercase; }
+.welcome-shortcuts dl { display:grid; gap:11px; margin:0; }
+.welcome-shortcuts dl div { display:grid; grid-template-columns:88px 1fr; gap:12px; align-items:baseline; }
+.welcome-shortcuts dt,.welcome-shortcuts dd { margin:0; font-size:11px; line-height:1.5; }
+.welcome-shortcuts dt { white-space:nowrap; font-family:var(--mono); }
+.welcome-shortcuts kbd { font:inherit; color:var(--ink); }
 h1 { margin:22px 0 24px; font-size:clamp(48px,6.2vw,88px); font-weight:400; line-height:1.02; letter-spacing:-.065em; }
 .intro { max-width:530px; margin:0 0 28px; font-size:19px; line-height:1.5; letter-spacing:-.02em; color:var(--muted); }
 .start-row { display:flex; align-items:center; gap:24px; }
@@ -85,23 +93,26 @@ h1 { margin:22px 0 24px; font-size:clamp(48px,6.2vw,88px); font-weight:400; line
 @keyframes image-zoom { from { transform:scale(var(--zoom-from)); } to { transform:scale(var(--zoom-to)); } }
 
 
-.app-shell:not(.is-playing) .shortcut-help-button { background:transparent; color:var(--muted); border-color:var(--line); box-shadow:none; backdrop-filter:none; }
 .shortcut-help-panel { background:var(--paper); color:var(--ink); border-color:var(--line); box-shadow:none; backdrop-filter:none; }
 .shortcut-help-panel dd { color:var(--muted); }
 .shortcut-help-panel kbd { color:var(--ink); border-color:var(--line); background:transparent; }
 @media (max-height:850px) and (min-width:701px) {
   .welcome { padding-top:110px; padding-bottom:44px; }
-  .welcome-copy { padding-bottom:30px; }
+  .welcome-intro { padding-bottom:30px; }
   h1 { font-size:clamp(46px,5.5vw,72px); margin:16px 0; }
   .intro { margin-bottom:22px; font-size:17px; }
   .feature { min-height:54px; padding:12px 0; }
+}
+@media (max-width:1000px) {
+  .welcome-intro { grid-template-columns:1fr; gap:36px; }
+  .welcome-shortcuts { width:min(100%,360px); justify-self:end; }
 }
 @media (max-width:700px) {
   .topbar { height:76px; padding:0 24px; }
   .brand { font-size:21px; }
   .top-note { font-size:8px; letter-spacing:.06em; }
   .welcome { padding:112px 24px 70px; overflow-y:auto; }
-  .welcome-copy { padding-bottom:48px; }
+  .welcome-intro { padding-bottom:48px; }
   h1 { font-size:clamp(40px,8.7vw,60px); margin:20px 0 24px; }
   .intro { font-size:17px; }
   .start-row { align-items:flex-start; flex-direction:column; gap:12px; }
@@ -119,5 +130,5 @@ h1 { margin:22px 0 24px; font-size:clamp(48px,6.2vw,88px); font-weight:400; line
   .next-button { flex:1; padding:0 10px; }
   .next-button span { margin-left:8px; }
 }
-@media (min-width:701px) and (max-height:650px) { .welcome { overflow-y:auto; } .welcome-copy { margin-bottom:24px; } }
+@media (min-width:701px) and (max-height:650px) { .welcome { overflow-y:auto; } .welcome-intro { margin-bottom:24px; } }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; } }

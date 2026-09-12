@@ -67,6 +67,22 @@ function imageMotion(photoId: string, frameKey: number, area: number, durationMs
   };
 }
 
+function KeyboardShortcuts() {
+  return (
+    <dl>
+      <div><dt><kbd>Space</kbd> / <kbd>K</kbd></dt><dd>Pause or play</dd></div>
+      <div><dt><kbd>←</kbd></dt><dd>Previous mix</dd></div>
+      <div><dt><kbd>→</kbd> / <kbd>↓</kbd></dt><dd>Next mix</dd></div>
+      <div><dt><kbd>↑</kbd></dt><dd>Hold this mix longer</dd></div>
+      <div><dt><kbd>Enter</kbd></dt><dd>Love / unlove hovered photo</dd></div>
+      <div><dt><kbd>Shift</kbd></dt><dd>Inspect hovered photo</dd></div>
+      <div><dt><kbd>Shift</kbd> + <kbd>+</kbd></dt><dd>Zoom in further</dd></div>
+      <div><dt><kbd>F</kbd></dt><dd>Toggle fullscreen</dd></div>
+      <div><dt><kbd>O</kbd></dt><dd>Choose another folder</dd></div>
+    </dl>
+  );
+}
+
 export default function Home() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [frame, setFrame] = useState<GalleryFrame | null>(null);
@@ -438,15 +454,22 @@ export default function Home() {
         </section>
       ) : (
         <section className="welcome">
-          <div className="welcome-copy">
-            <div className="eyebrow">A LOCAL IMAGE SLIDESHOW</div>
-            <h1>Every photo.<br />Room to be seen<span className="accent">.</span></h1>
-            <p className="intro">Choose a folder. Your images find their place in an ever-changing, full-screen mosaic.</p>
-            <div className="start-row">
-              <button className="primary-action" onClick={chooseFolder}><span>Choose image folder</span><span aria-hidden="true">↗</span></button>
-              <p className="privacy-note">On your device. No uploads.</p>
+          <div className="welcome-intro">
+            <div className="welcome-copy">
+              <div className="eyebrow">A LOCAL IMAGE SLIDESHOW</div>
+              <h1>Every photo.<br />Room to be seen<span className="accent">.</span></h1>
+              <p className="intro">Choose a folder. Your images find their place in an ever-changing, full-screen mosaic.</p>
+              <div className="start-row">
+                <button className="primary-action" onClick={chooseFolder}><span>Choose image folder</span><span aria-hidden="true">↗</span></button>
+                <p className="privacy-note">On your device. No uploads.</p>
+              </div>
+              {message && <p className="error-message" role="alert">{message}</p>}
             </div>
-            {message && <p className="error-message" role="alert">{message}</p>}
+
+            <aside className="welcome-shortcuts" aria-labelledby="welcome-shortcuts-title">
+              <h2 id="welcome-shortcuts-title">Keyboard shortcuts</h2>
+              <KeyboardShortcuts />
+            </aside>
           </div>
 
           <div className="features-heading"><span>THOUGHTFULLY ARRANGED</span><span>01 — 04</span></div>
@@ -507,23 +530,13 @@ export default function Home() {
           title={timerPaused ? "Slide timer paused" : "Slide time remaining"}
         />
       )}
-      <div className="shortcut-help">
+      {photos.length > 0 && <div className="shortcut-help">
         <button type="button" className="shortcut-help-button" aria-label="Show keyboard shortcuts" aria-describedby="keyboard-shortcuts">?</button>
         <div id="keyboard-shortcuts" className="shortcut-help-panel" role="tooltip">
           <strong>Keyboard shortcuts</strong>
-          <dl>
-            <div><dt><kbd>Space</kbd> / <kbd>K</kbd></dt><dd>Pause or play</dd></div>
-            <div><dt><kbd>←</kbd></dt><dd>Previous mix</dd></div>
-            <div><dt><kbd>→</kbd> / <kbd>↓</kbd></dt><dd>Next mix</dd></div>
-            <div><dt><kbd>↑</kbd></dt><dd>Hold this mix longer</dd></div>
-            <div><dt><kbd>Enter</kbd></dt><dd>Love hovered photo</dd></div>
-            <div><dt><kbd>Shift</kbd></dt><dd>Inspect hovered photo</dd></div>
-            <div><dt><kbd>Shift</kbd> + <kbd>+</kbd></dt><dd>Zoom in further</dd></div>
-            <div><dt><kbd>F</kbd></dt><dd>Toggle fullscreen</dd></div>
-            <div><dt><kbd>O</kbd></dt><dd>Choose another folder</dd></div>
-          </dl>
+          <KeyboardShortcuts />
         </div>
-      </div>
+      </div>}
       {shiftHeld && detailLens && (
         <div
           className="detail-lens"
