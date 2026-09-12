@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { collectMediaFiles, compareMediaFiles, isImageFile, isAudioFile, mediaPath } from "../src/media.ts";
+import { collectMediaFiles, compareMediaFiles, isImageFile, isAudioFile, isVideoFile, mediaPath } from "../src/media.ts";
 
 function fileEntry(name, type = "") {
   const file = new File([name], name, { type });
@@ -28,6 +28,12 @@ test("media recognition supports MIME types and case-insensitive extensions", ()
   for (const name of ["notes.mp3.txt", "notes.wav.txt", "track.ogg", "movie.mp4"]) {
     assert.equal(isAudioFile({ name, type: "" }), false);
   }
+  for (const [name, type] of [["clip.MP4", ""], ["clip.mov", "application/octet-stream"], ["clip", "video/mp4"], ["clip", "Video/QuickTime"]]) {
+    assert.equal(isVideoFile({ name, type }), true);
+  }
+  for (const name of ["clip.mp4.txt", "clip.webm", "clip.m4v", "track.mp3"]) {
+    assert.equal(isVideoFile({ name, type: "" }), false);
+  }
 });
 
 test("recursive folder intake preserves relative paths and natural order", async () => {
@@ -36,11 +42,12 @@ test("recursive folder intake preserves relative paths and natural order", async
     fileEntry("cover.PNG"),
     directory("disc2", [fileEntry("track10.MP3"), fileEntry("track2.WAV"), fileEntry("01.mp3")]),
     fileEntry("video.mp4"),
+    directory("videos", [fileEntry("clip.MOV"), fileEntry("unsupported.webm")]),
     fileEntry("mime-only", "audio/x-wav"),
   ];
   const files = await collectMediaFiles(directory("album", entries));
   assert.deepEqual(files.map(mediaPath), [
-    "cover.PNG", "disc2/01.mp3", "disc2/track2.WAV", "disc2/track10.MP3", "disc10/01.mp3", "mime-only",
+    "cover.PNG", "disc2/01.mp3", "disc2/track2.WAV", "disc2/track10.MP3", "disc10/01.mp3", "mime-only", "video.mp4", "videos/clip.MOV",
   ]);
   assert.equal(files[1].name, "01.mp3");
   assert.equal(files[4].name, "01.mp3");

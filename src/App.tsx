@@ -1,28 +1,11 @@
 import { ChangeEvent, CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { arrangePhotos, createSmartMosaic, MosaicLayout, PhotoUsage, smallTilePriorities, Viewport } from "./layout";
-import { collectMediaFiles, DirectoryPickerWindow, isImageFile, isAudioFile } from "./media";
+import { collectMediaFiles, DirectoryPickerWindow, isAudioFile } from "./media";
 import { MusicControls, useAudioPlayer } from "./MusicControls";
+import { GalleryMedia as Photo, galleryMediaFromFiles, getSlideDurationMs } from "./gallery-media";
+import { GalleryVideo, VideoDetailFrame } from "./GalleryVideo";
 
-type Photo = { id: string; name: string; url: string; width: number; height: number; lastModified: number };
 const SPEEDS = [3000, 5000, 8000, 12000];
-
-function getDimensions(url: string) {
-  return new Promise<{ width: number; height: number }>((resolve) => {
-    const image = new Image();
-    image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
-    image.onerror = () => resolve({ width: 1, height: 1 });
-    image.src = url;
-  });
-}
-
-async function photosFromFiles(files: File[]) {
-  const supported = files.filter(isImageFile);
-  return Promise.all(supported.map(async (file, index) => {
-    const url = URL.createObjectURL(file);
-    const dimensions = await getDimensions(url);
-    return { id: `${file.name}-${file.lastModified}-${index}`, name: file.name.replace(/\.[^.]+$/, ""), url, lastModified: file.lastModified, ...dimensions };
-  }));
-}
 
 type GalleryFrame = { layout: MosaicLayout<Photo>; key: number; prioritizedIds: Set<string> };
 type DetailLens = { photo: Photo; pointerX: number; pointerY: number; tile: DOMRect };
@@ -52,24 +35,44 @@ function imageMotion(photoId: string, frameKey: number, area: number, durationMs
   };
 }
 
-function KeyboardShortcuts() {
-  return (
-    <dl>
-      <div><dt><kbd>Space</kbd> / <kbd>K</kbd></dt><dd>Pause / play slideshow</dd></div>
-      <div><dt><kbd>A</kbd></dt><dd>Pause / play music</dd></div>
-      <div><dt><kbd>M</kbd></dt><dd>Mute / unmute music</dd></div>
-      <div><dt><kbd>−</kbd> / <kbd>=</kbd></dt><dd>Music volume</dd></div>
-      <div><dt><kbd>[</kbd> / <kbd>]</kbd></dt><dd>Previous / next track</dd></div>
-      <div><dt><kbd>←</kbd></dt><dd>Previous mix</dd></div>
-      <div><dt><kbd>→</kbd> / <kbd>↓</kbd></dt><dd>Next mix</dd></div>
-      <div><dt><kbd>↑</kbd></dt><dd>Hold this mix longer</dd></div>
-      <div><dt><kbd>Enter</kbd></dt><dd>Love / unlove hovered photo</dd></div>
-      <div><dt><kbd>Shift</kbd></dt><dd>Inspect hovered photo</dd></div>
-      <div><dt><kbd>Shift</kbd> + <kbd>+</kbd></dt><dd>Zoom in further</dd></div>
-      <div><dt><kbd>F</kbd></dt><dd>Toggle fullscreen</dd></div>
-      <div><dt><kbd>O</kbd></dt><dd>Choose another folder</dd></div>
-    </dl>
+const SHORTCUT_GROUPS = [
+  { title: "Slideshow", shortcuts: [
+    { keys: ["Space", "K"], label: "Play / pause", description: "Pause / play slideshow" },
+    { keys: ["←"], label: "Previous mix", description: "Previous mix" },
+    { keys: ["→", "↓"], label: "Next mix", description: "Next mix" },
+    { keys: ["↑"], label: "Hold longer", description: "Hold this mix longer" },
+    { keys: ["F"], label: "Fullscreen", description: "Toggle fullscreen" },
+    { keys: ["O"], label: "Choose folder", description: "Choose another folder" },
+  ] },
+  { title: "Photos & videos", shortcuts: [
+    { keys: ["Enter"], label: "Love / unlove", description: "Love / unlove hovered item" },
+    { keys: ["P"], label: "Feature next", description: "Feature hovered item next" },
+    { keys: ["V"], label: "Video sound", description: "Toggle hovered video sound" },
+    { keys: ["Shift"], label: "Inspect detail", description: "Inspect hovered item" },
+    { keys: ["Shift", "+"], separator: " + ", label: "Zoom further", description: "Zoom in further" },
+  ] },
+  { title: "Music", shortcuts: [
+    { keys: ["A"], label: "Play / pause", description: "Pause / play music" },
+    { keys: ["M"], label: "Mute / unmute", description: "Mute / unmute music" },
+    { keys: ["−", "="], label: "Volume", description: "Music volume" },
+    { keys: ["[", "]"], label: "Previous / next", description: "Previous / next track" },
+  ] },
+];
+
+function KeyboardShortcuts({ grouped = false }: { grouped?: boolean }) {
+  const renderShortcut = (shortcut: typeof SHORTCUT_GROUPS[number]["shortcuts"][number]) => (
+    <div key={shortcut.description}>
+      <dt>{shortcut.keys.map((key, index) => <span key={key}>{index > 0 && (shortcut.separator ?? " / ")}<kbd>{key}</kbd></span>)}</dt>
+      <dd>{grouped ? shortcut.label : shortcut.description}</dd>
+    </div>
   );
+  if (!grouped) return <dl>{SHORTCUT_GROUPS.flatMap((group) => group.shortcuts.map(renderShortcut))}</dl>;
+  return <div className="shortcut-groups">{SHORTCUT_GROUPS.map((group) => (
+    <section className="shortcut-group" key={group.title} aria-label={group.title}>
+      <h3>{group.title}</h3>
+      <dl>{group.shortcuts.map(renderShortcut)}</dl>
+    </section>
+  ))}</div>;
 }
 
 export default function Home() {
@@ -84,11 +87,15 @@ export default function Home() {
   const [detailLens, setDetailLens] = useState<DetailLens | null>(null);
   const [detailLensZoom, setDetailLensZoom] = useState(DETAIL_LENS_ZOOM);
   const [lovedIds, setLovedIds] = useState<Set<string>>(new Set());
+  const [audibleVideoId, setAudibleVideoId] = useState<string | null>(null);
+  const [videoReadiness, setVideoReadiness] = useState<{ key: string; ready: Set<string> }>({ key: "", ready: new Set() });
+  const [durationOverrideKey, setDurationOverrideKey] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const loadRequestRef = useRef(0);
   const shellRef = useRef<HTMLElement>(null);
   const durationPieRef = useRef<HTMLSpanElement>(null);
   const photosRef = useRef<Photo[]>([]);
+  const videoElementsRef = useRef(new Map<string, HTMLVideoElement>());
   const frameRef = useRef<GalleryFrame | null>(null);
   const viewportRef = useRef<Viewport>(currentViewport());
   const historyRef = useRef<Map<string, PhotoUsage>>(new Map());
@@ -102,7 +109,7 @@ export default function Home() {
   const advanceDeadlineRef = useRef(0);
   const advanceRemainingRef = useRef(intervalMs);
   const countdownDurationRef = useRef(intervalMs);
-  const timerContextRef = useRef<{ frameKey: number | null; intervalMs: number; photos: Photo[] } | null>(null);
+  const timerContextRef = useRef<{ frameKey: number | null; durationMs: number; photos: Photo[] } | null>(null);
   const timerWasPausedRef = useRef(false);
   const detailLensActiveRef = useRef(false);
   const hoveredTileRef = useRef<{ element: HTMLElement; photo: Photo } | null>(null);
@@ -111,7 +118,14 @@ export default function Home() {
     left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
   )), [photos]);
   const viewedCount = photos.reduce((count, photo) => count + Number((historyRef.current.get(photo.id)?.shown ?? 0) > 0), 0);
-  const timerPaused = paused || detailLens !== null;
+  const playbackKey = `${photos[0]?.url ?? ""}:${frame?.key ?? ""}`;
+  const playbackKeyRef = useRef(playbackKey);
+  playbackKeyRef.current = playbackKey;
+  const frameVideos = frame?.layout.tiles.filter(({ photo }) => photo.kind === "video") ?? [];
+  const videosLoading = frameVideos.some(({ photo }) => videoReadiness.key !== playbackKey || !videoReadiness.ready.has(photo.id));
+  const automaticDurationMs = getSlideDurationMs(frame?.layout.tiles.map(({ photo }) => photo) ?? [], intervalMs);
+  const slideDurationMs = durationOverrideKey === playbackKey ? intervalMs : automaticDurationMs;
+  const timerPaused = paused || detailLens !== null || videosLoading;
   const hasMedia = photos.length > 0 || audio.tracks.length > 0;
   const wakeChrome = useCallback(() => {
     setShowChrome(true);
@@ -121,6 +135,7 @@ export default function Home() {
 
   const advance = useCallback(() => {
     if (!photosRef.current.length) return;
+    setAudibleVideoId(null);
 
     const requestedPriorityId = requestedPriorityRef.current;
     const nextHistoryIndex = frameIndexRef.current + 1;
@@ -170,6 +185,7 @@ export default function Home() {
   const goBack = useCallback(() => {
     const previousIndex = frameIndexRef.current - 1;
     if (previousIndex < 0) return;
+    setAudibleVideoId(null);
     const previousFrame = frameHistoryRef.current[previousIndex];
     frameIndexRef.current = previousIndex;
     frameRef.current = previousFrame;
@@ -177,13 +193,15 @@ export default function Home() {
   }, []);
 
   const loadFiles = useCallback(async (files: File[], request = ++loadRequestRef.current) => {
-    const nextPhotos = await photosFromFiles(files);
+    const { items: nextPhotos, skipped } = await galleryMediaFromFiles(files);
     if (request !== loadRequestRef.current) {
       nextPhotos.forEach((photo) => URL.revokeObjectURL(photo.url));
       return;
     }
     if (!nextPhotos.length && !files.some(isAudioFile)) {
-      setMessage("No supported images or music found. Try JPG, PNG, WebP, AVIF, GIF, MP3, or WAV files.");
+      setMessage(skipped.length
+        ? "These images or videos couldn’t be opened. Try other files or a video encoding supported by your browser."
+        : "No supported media found. Try JPG, PNG, WebP, AVIF, GIF, MP4, MOV, MP3, or WAV files.");
       return;
     }
     photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.url));
@@ -197,6 +215,8 @@ export default function Home() {
     frameRef.current = null;
     setFrame(null);
     setPhotos(nextPhotos);
+    setAudibleVideoId(null);
+    setDurationOverrideKey(null);
     player.setFiles(files);
     setLovedIds(new Set());
     const layout = createSmartMosaic(nextPhotos, viewportRef.current, historyRef.current, new Set(), new Set(), 0);
@@ -210,7 +230,7 @@ export default function Home() {
       setFrame(firstFrame);
     }
     setPaused(false);
-    setMessage("");
+    setMessage(skipped.length ? `${skipped.length} media file${skipped.length === 1 ? "" : "s"} couldn’t be opened and ${skipped.length === 1 ? "was" : "were"} skipped.` : "");
   }, [player]);
 
   const chooseFolder = useCallback(async () => {
@@ -247,17 +267,17 @@ export default function Home() {
     const now = Date.now();
     const previousContext = timerContextRef.current;
     const contextChanged = previousContext?.frameKey !== (frame?.key ?? null)
-      || previousContext?.intervalMs !== intervalMs
+      || previousContext?.durationMs !== slideDurationMs
       || previousContext?.photos !== photos;
 
     if (contextChanged) {
-      advanceRemainingRef.current = intervalMs;
-      countdownDurationRef.current = intervalMs;
+      advanceRemainingRef.current = slideDurationMs;
+      countdownDurationRef.current = slideDurationMs;
     } else if (timerPaused && !timerWasPausedRef.current) {
       advanceRemainingRef.current = Math.max(0, advanceDeadlineRef.current - now);
     }
 
-    timerContextRef.current = { frameKey: frame?.key ?? null, intervalMs, photos };
+    timerContextRef.current = { frameKey: frame?.key ?? null, durationMs: slideDurationMs, photos };
     timerWasPausedRef.current = timerPaused;
     if (timerPaused || photos.length === 0) return;
 
@@ -268,17 +288,70 @@ export default function Home() {
       if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = null;
     };
-  }, [advance, frame?.key, intervalMs, photos, timerPaused]);
+  }, [advance, frame?.key, slideDurationMs, photos, timerPaused]);
 
   const holdCurrentSlide = useCallback(() => {
     if (timerPaused || !photosRef.current.length) return;
     const remainingMs = Math.max(0, advanceDeadlineRef.current - Date.now());
     if (advanceTimerRef.current !== null) window.clearTimeout(advanceTimerRef.current);
-    const extendedDelay = remainingMs + intervalMs;
+    const extendedDelay = remainingMs + slideDurationMs;
     countdownDurationRef.current = extendedDelay;
     advanceDeadlineRef.current = Date.now() + extendedDelay;
     advanceTimerRef.current = window.setTimeout(advance, extendedDelay);
-  }, [advance, intervalMs, timerPaused]);
+  }, [advance, slideDurationMs, timerPaused]);
+
+  const registerVideo = useCallback((id: string, element: HTMLVideoElement | null) => {
+    if (element) videoElementsRef.current.set(id, element);
+    else {
+      videoElementsRef.current.delete(id);
+      setAudibleVideoId((current) => current === id ? null : current);
+    }
+  }, []);
+
+  const handleVideoReady = useCallback((id: string, ready: boolean) => {
+    if (playbackKeyRef.current !== playbackKey) return;
+    setVideoReadiness((current) => {
+      const sameFrame = current.key === playbackKey;
+      if (sameFrame && current.ready.has(id) === ready) return current;
+      const next = new Set(sameFrame ? current.ready : []);
+      if (ready) next.add(id);
+      else next.delete(id);
+      return { key: playbackKey, ready: next };
+    });
+  }, [playbackKey]);
+
+  const handleVideoBlocked = useCallback(() => setPaused(true), []);
+
+  const toggleVideoSound = useCallback((id: string) => {
+    const video = videoElementsRef.current.get(id);
+    if (!video) return;
+    const enableSound = video.muted;
+    for (const [otherId, element] of videoElementsRef.current) element.muted = !enableSound || otherId !== id;
+    setAudibleVideoId(enableSound ? id : null);
+    // Unmute and request playback inside the click/key gesture for browser audio policies.
+    if (!timerPaused) void video.play().catch((error: unknown) => {
+      if (playbackKeyRef.current !== playbackKey) return;
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      video.muted = true;
+      setAudibleVideoId(null);
+      setPaused(true);
+      setMessage("Video playback was blocked. Press play to try again.");
+    });
+  }, [playbackKey, timerPaused]);
+
+  const toggleSlideshow = useCallback(() => {
+    if (paused && !detailLens && !videosLoading) {
+      for (const video of videoElementsRef.current.values()) {
+        void video.play().catch((error: unknown) => {
+          if (playbackKeyRef.current !== playbackKey) return;
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          setPaused(true);
+          setMessage("Video playback was blocked. Press play to try again.");
+        });
+      }
+    }
+    setPaused((value) => !value);
+  }, [detailLens, paused, playbackKey, videosLoading]);
 
   const showDetailLens = useCallback((element: HTMLElement, photo: Photo, pointerX: number, pointerY: number) => {
     detailLensActiveRef.current = true;
@@ -331,7 +404,7 @@ export default function Home() {
     detailLensActiveRef.current = false;
     setDetailLens(null);
     setDetailLensZoom(DETAIL_LENS_ZOOM);
-  }, [frame?.key]);
+  }, [playbackKey]);
 
   useEffect(() => {
     if (timerPaused || photos.length === 0) return;
@@ -347,7 +420,7 @@ export default function Home() {
 
     updatePie();
     return () => cancelAnimationFrame(animationFrame);
-  }, [frame?.key, intervalMs, photos, timerPaused]);
+  }, [frame?.key, slideDurationMs, photos, timerPaused]);
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -377,14 +450,16 @@ export default function Home() {
         event.preventDefault();
         if (!event.repeat) toggleLoved(hoveredTileRef.current.photo.id);
       }
-      else if (event.key === " " || event.key.toLowerCase() === "k") { event.preventDefault(); if (!event.repeat) setPaused((value) => !value); }
+      else if (key === "p" && hoveredTileRef.current) { event.preventDefault(); if (!event.repeat) promoteOnNextSlide(hoveredTileRef.current.photo.id); }
+      else if (key === "v" && hoveredTileRef.current?.photo.kind === "video") { event.preventDefault(); if (!event.repeat) toggleVideoSound(hoveredTileRef.current.photo.id); }
+      else if (event.key === " " || event.key.toLowerCase() === "k") { event.preventDefault(); if (!event.repeat) toggleSlideshow(); }
       else if (event.key === "ArrowLeft") { event.preventDefault(); goBack(); }
       else if (event.key === "ArrowRight" || event.key === "ArrowDown") { event.preventDefault(); advance(); }
       else if (event.key === "ArrowUp") { event.preventDefault(); if (!event.repeat) holdCurrentSlide(); }
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [advance, audio.tracks.length, chooseFolder, goBack, hasMedia, holdCurrentSlide, player, toggleLoved, wakeChrome]);
+  }, [advance, audio.tracks.length, chooseFolder, goBack, hasMedia, holdCurrentSlide, player, promoteOnNextSlide, toggleLoved, toggleSlideshow, toggleVideoSound, wakeChrome]);
 
   useEffect(() => {
     let animationFrame = 0;
@@ -433,16 +508,25 @@ export default function Home() {
     if (hideTimer.current) clearTimeout(hideTimer.current);
   }, []);
 
+  const detailLensStyle: CSSProperties | undefined = detailLens ? {
+    left: detailLens.tile.left - detailLens.pointerX + DETAIL_LENS_SIZE / 2,
+    top: detailLens.tile.top - detailLens.pointerY + DETAIL_LENS_SIZE / 2,
+    width: detailLens.tile.width,
+    height: detailLens.tile.height,
+    transform: `scale(${detailLensZoom})`,
+    transformOrigin: `${detailLens.pointerX - detailLens.tile.left}px ${detailLens.pointerY - detailLens.tile.top}px`,
+  } : undefined;
+
   return (
-    <main ref={shellRef} className={`app-shell ${hasMedia ? "is-playing" : ""} ${paused ? "is-paused" : ""}`} onPointerMove={wakeChrome}>
+    <main ref={shellRef} className={`app-shell ${hasMedia ? "is-playing" : ""} ${timerPaused ? "is-paused" : ""}`} onPointerMove={wakeChrome}>
       {photos.length ? (
-        <section className="mosaic" aria-label="Photo slideshow">
+        <section className="mosaic" aria-label="Photo and video slideshow" aria-busy={videosLoading}>
           {frame?.layout.tiles.map((tile) => (
             <button
               type="button"
               className="tile"
-              key={`${tile.photo.id}-${frame.key}`}
-              onClick={() => promoteOnNextSlide(tile.photo.id)}
+              key={`${tile.photo.url}-${frame.key}`}
+              onClick={() => tile.photo.kind === "video" ? toggleVideoSound(tile.photo.id) : promoteOnNextSlide(tile.photo.id)}
               onPointerEnter={(event) => {
                 hoveredTileRef.current = { element: event.currentTarget, photo: tile.photo };
                 pointerRef.current = { x: event.clientX, y: event.clientY };
@@ -458,16 +542,30 @@ export default function Home() {
                 setDetailLens(null);
                 setDetailLensZoom(DETAIL_LENS_ZOOM);
               }}
-              aria-label={`Show ${tile.photo.name} large on the next slide. ${lovedIds.has(tile.photo.id) ? "Loved; press Enter to unlove" : "Press Enter to love"}`}
+              aria-label={`${tile.photo.kind === "video" ? `${audibleVideoId === tile.photo.id ? "Mute" : "Unmute"} ${tile.photo.name}. Press P to feature it next.` : `Show ${tile.photo.name} large on the next slide.`} ${lovedIds.has(tile.photo.id) ? "Loved; press Enter to unlove" : "Press Enter to love"}`}
+              aria-pressed={tile.photo.kind === "video" ? audibleVideoId === tile.photo.id : undefined}
               style={{
                 "--tile-x": `${tile.x * 100}%`,
                 "--tile-y": `${tile.y * 100}%`,
                 "--tile-width": `${tile.width * 100}%`,
                 "--tile-height": `${tile.height * 100}%`,
-                ...imageMotion(tile.photo.id, frame.key, tile.width * tile.height, intervalMs),
+                ...imageMotion(tile.photo.id, frame.key, tile.width * tile.height, slideDurationMs),
               } as CSSProperties}
             >
-              <img src={tile.photo.url} alt="" draggable={false} />
+              {tile.photo.kind === "video" ? <>
+                <GalleryVideo
+                  media={tile.photo}
+                  paused={timerPaused}
+                  muted={audibleVideoId !== tile.photo.id}
+                  onElement={registerVideo}
+                  onReady={handleVideoReady}
+                  onError={setMessage}
+                  onBlocked={handleVideoBlocked}
+                />
+                <span className={`video-sound ${audibleVideoId === tile.photo.id ? "audible" : ""}`} aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><path d="M2 6h3l4-3v10l-4-3H2z" />{audibleVideoId === tile.photo.id ? <path d="M11 5c2 1 2 5 0 6" /> : <path d="m11 6 4 4m0-4-4 4" />}</svg>
+                </span>
+              </> : <img src={tile.photo.url} alt="" draggable={false} />}
               {lovedIds.has(tile.photo.id) && <span className="tile-love" aria-hidden="true">♥</span>}
               <span className="tile-caption" aria-hidden="true">{tile.photo.name}</span>
             </button>
@@ -482,11 +580,11 @@ export default function Home() {
         <section className="welcome">
           <div className="welcome-intro">
             <div className="welcome-copy">
-              <div className="eyebrow">A LOCAL IMAGE SLIDESHOW</div>
+              <div className="eyebrow">A LOCAL PHOTO & VIDEO SLIDESHOW</div>
               <h1>Every photo.<br />Room to be seen<span className="accent">.</span></h1>
-              <p className="intro">Choose a folder. Your images find their place in an ever-changing, full-screen mosaic. Add MP3 or WAV files for a soundtrack.</p>
+              <p className="intro">Choose a folder. Your photos and videos find their place in an ever-changing, full-screen mosaic. Add MP3 or WAV files for a soundtrack.</p>
               <div className="start-row">
-                <button className="primary-action" onClick={chooseFolder}><span>Choose image folder</span><span aria-hidden="true">↗</span></button>
+                <button className="primary-action" onClick={chooseFolder}><span>Choose media folder</span><span aria-hidden="true">↗</span></button>
                 <p className="privacy-note">On your device. No uploads.</p>
               </div>
               {message && <p className="error-message" role="alert">{message}</p>}
@@ -494,7 +592,7 @@ export default function Home() {
 
             <aside className="welcome-shortcuts" aria-labelledby="welcome-shortcuts-title">
               <h2 id="welcome-shortcuts-title">Keyboard shortcuts</h2>
-              <KeyboardShortcuts />
+              <KeyboardShortcuts grouped />
             </aside>
           </div>
 
@@ -503,7 +601,7 @@ export default function Home() {
           <div className="feature-strip" aria-label="Gallery features">
             <div className="feature"><span className="feature-number">01</span><div><b>Fits the frame</b><small>Smart layouts minimize cropping.</small></div></div>
             <div className="feature"><span className="feature-number">02</span><div><b>Fair rotation</b><small>Tracks views so no photo is forgotten.</small></div></div>
-            <div className="feature"><span className="feature-number">03</span><div><b>Direct the mix</b><small>Click a photo to feature it next.</small></div></div>
+            <div className="feature"><span className="feature-number">03</span><div><b>Direct the mix</b><small>Click a photo to feature it next. Click a video for sound.</small></div></div>
             <div className="feature"><span className="feature-number">04</span><div><b>Inspect details</b><small>Hold Shift for a close-up lens.</small></div></div>
           </div>
         </section>
@@ -518,7 +616,7 @@ export default function Home() {
         <div
           className="view-progress"
           role="progressbar"
-          aria-label={`${viewedCount} of ${photos.length} images viewed`}
+          aria-label={`${viewedCount} of ${photos.length} photos and videos viewed`}
           aria-valuemin={0}
           aria-valuemax={photos.length}
           aria-valuenow={viewedCount}
@@ -537,10 +635,16 @@ export default function Home() {
       {hasMedia && (
         <div className={`control-dock ${showChrome || paused ? "visible" : ""}`}>
           {photos.length > 0 && <>
-            <button className="icon-button" onClick={() => setPaused((value) => !value)} aria-label={paused ? "Play slideshow" : "Pause slideshow"} aria-keyshortcuts="Space K"><span aria-hidden="true">{paused ? "▶" : "Ⅱ"}</span></button>
+            <button className="icon-button" onClick={toggleSlideshow} aria-label={paused ? "Play slideshow" : "Pause slideshow"} aria-keyshortcuts="Space K"><span aria-hidden="true">{paused ? "▶" : "Ⅱ"}</span></button>
             <button className="next-button" onClick={advance}>Next mix <span aria-hidden="true">→</span></button>
             <span className="divider" />
-            <label className="speed-control"><span>PACE</span><select value={intervalMs} onChange={(event) => setIntervalMs(Number(event.target.value))}>{SPEEDS.map((speed) => <option key={speed} value={speed}>{speed / 1000}s</option>)}</select></label>
+            <label className="speed-control"><span>PACE</span><select value={frameVideos.length && durationOverrideKey !== playbackKey ? "video" : intervalMs} onChange={(event) => {
+              if (event.target.value === "video") setDurationOverrideKey(null);
+              else { setIntervalMs(Number(event.target.value)); setDurationOverrideKey(playbackKey); }
+            }}>
+              {frameVideos.length > 0 && <option value="video">{Number((automaticDurationMs / 1000).toFixed(1))}s video</option>}
+              {SPEEDS.map((speed) => <option key={speed} value={speed}>{speed / 1000}s</option>)}
+            </select></label>
             <span className="counter"><b>{frame?.layout.tiles.length ?? 0}</b> / {photos.length}</span>
           </>}
           {audio.tracks.length > 0 && <>
@@ -559,7 +663,7 @@ export default function Home() {
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={timerPaused ? undefined : 100}
-          title={timerPaused ? "Slide timer paused" : "Slide time remaining"}
+          title={videosLoading ? "Preparing videos" : timerPaused ? "Slide timer paused" : `Slide time remaining · ${Number((slideDurationMs / 1000).toFixed(1))}s`}
         />
       )}
       {hasMedia && <div className="shortcut-help">
@@ -575,22 +679,13 @@ export default function Home() {
           aria-hidden="true"
           style={{ left: detailLens.pointerX, top: detailLens.pointerY }}
         >
-          <img
-            src={detailLens.photo.url}
-            alt=""
-            style={{
-              left: detailLens.tile.left - detailLens.pointerX + DETAIL_LENS_SIZE / 2,
-              top: detailLens.tile.top - detailLens.pointerY + DETAIL_LENS_SIZE / 2,
-              width: detailLens.tile.width,
-              height: detailLens.tile.height,
-              transform: `scale(${detailLensZoom})`,
-              transformOrigin: `${detailLens.pointerX - detailLens.tile.left}px ${detailLens.pointerY - detailLens.tile.top}px`,
-            }}
-          />
+          {detailLens.photo.kind === "video"
+            ? <VideoDetailFrame video={videoElementsRef.current.get(detailLens.photo.id) ?? null} style={detailLensStyle!} />
+            : <img src={detailLens.photo.url} alt="" style={detailLensStyle} />}
         </div>
       )}
       {(message || audio.error) && hasMedia && <div className="toast" role="alert">{message || audio.error}</div>}
-      <input ref={inputRef} className="sr-only" tabIndex={-1} type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave,.mp3,.wav" multiple onChange={handleFallback} {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} />
+      <input ref={inputRef} className="sr-only" tabIndex={-1} type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,video/mp4,video/quicktime,.mp4,.mov,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave,.mp3,.wav" multiple onChange={handleFallback} {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} />
     </main>
   );
 }

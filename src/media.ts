@@ -7,6 +7,7 @@ type FileIdentity = Pick<File, "name" | "type">;
 
 const IMAGE_TYPES = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
 const AUDIO_TYPES = new Set(["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"]);
+const VIDEO_TYPES = new Set(["video/mp4", "video/quicktime"]);
 const pickedPaths = new WeakMap<File, string>();
 const pathOrder = new Intl.Collator("en", { numeric: true, sensitivity: "base" });
 
@@ -16,6 +17,10 @@ export function isImageFile(file: FileIdentity): boolean {
 
 export function isAudioFile(file: FileIdentity): boolean {
   return AUDIO_TYPES.has(file.type.toLowerCase()) || /\.(mp3|wav)$/i.test(file.name);
+}
+
+export function isVideoFile(file: FileIdentity): boolean {
+  return VIDEO_TYPES.has(file.type.toLowerCase()) || /\.(mp4|mov)$/i.test(file.name);
 }
 
 export function mediaPath(file: File): string {
@@ -38,7 +43,7 @@ export async function collectMediaFiles(handle: DirectoryPickerHandle): Promise<
         await collect(entry as DirectoryPickerHandle, path);
       } else {
         const file = await entry.getFile();
-        if (isImageFile(file) || isAudioFile(file)) {
+        if (isImageFile(file) || isAudioFile(file) || isVideoFile(file)) {
           // Directory-picker Files omit webkitRelativePath. Preserve the path
           // separately so nested tracks retain their ordering and display name.
           pickedPaths.set(file, path);

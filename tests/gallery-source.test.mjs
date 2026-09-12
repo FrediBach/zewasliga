@@ -13,7 +13,7 @@ test("gallery includes directory access and slideshow controls", async () => {
   assert.match(page, /ArrowLeft/);
   assert.match(page, /ArrowRight.*ArrowDown/);
   assert.match(page, /ArrowUp/);
-  assert.match(page, /remainingMs \+ intervalMs/);
+  assert.match(page, /remainingMs \+ slideDurationMs/);
   assert.match(page, /className={`duration-pie/);
   assert.match(page, /--remaining/);
 });
@@ -57,9 +57,9 @@ test("slide images receive subtle size-aware zoom motion", async () => {
   assert.match(styles, /\.is-paused \.tile img \{ animation-play-state:paused/);
 });
 
-test("clicking a tile promotes it on the next slide", async () => {
+test("clicking an image promotes it while clicking a video toggles its audio", async () => {
   const page = await readFile(pageUrl, "utf8");
-  assert.match(page, /onClick=\{\(\) => promoteOnNextSlide\(tile\.photo\.id\)\}/);
+  assert.match(page, /onClick=\{\(\) => tile\.photo\.kind === "video" \? toggleVideoSound\(tile\.photo\.id\) : promoteOnNextSlide\(tile\.photo\.id\)\}/);
   assert.match(page, /requestedPriorityId[\s\S]*new Set\(\[requestedPriorityId\]\)/);
   assert.match(page, /Show \$\{tile\.photo\.name\} large on the next slide/);
 });

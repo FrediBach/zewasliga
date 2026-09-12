@@ -1,6 +1,6 @@
 # Zewasliga
 
-A zero-waste slide gallery that turns a local directory into a changing, full-screen photo mosaic, with an optional MP3 or WAV soundtrack. Images and music are read directly in the browser and are never uploaded.
+A zero-waste slide gallery that turns a local directory into a changing, full-screen photo and video mosaic, with an optional MP3 or WAV soundtrack. All media is read directly in the browser and is never uploaded.
 
 Every slide is planned for the current viewport. Zewasliga compares fair combinations of recently unused photos, matches portrait and landscape images to row- and column-based mosaics, and chooses the arrangement with the least crop. Photos that receive the smallest tiles are carried into the next slide and promoted into its largest spaces. The mosaic always covers the full screen and automatically replans itself when the window or device orientation changes.
 
@@ -12,7 +12,13 @@ npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`, choose a folder of JPG, PNG, WebP, AVIF, or GIF files, and the slideshow starts automatically.
+Open `http://localhost:5173`, choose a folder of JPG, PNG, WebP, AVIF, GIF, MP4, or MOV files, and the slideshow starts automatically.
+
+Videos use their detected dimensions in the same layouts, crop minimization, fair rotation, favorites, and view tracking as photos. They play inline and muted. Click a video to toggle its sound; only one visible video is audible at a time. Video sound is independent of the optional music soundtrack. Press `P` over a photo or video to feature it on the next slide.
+
+A slide containing videos defaults to the longest video's duration, even when shorter than the selected photo pace. Shorter videos loop. `↑` adds another full slide duration, so videos loop during the extension too. The Pace menu can override the current video slide or restore its automatic duration; future video slides use their own durations. Pausing the slideshow or using the detail lens pauses the videos and countdown together. Loading videos also holds the countdown. New slides start their videos from the beginning and muted.
+
+MP4 and MOV are containers; playback depends on the codecs supported by the browser. Files the browser cannot open are skipped with a message. Videos remain local, and only their metadata is loaded during folder scanning.
 
 Include MP3 or WAV files in the folder or its subfolders to add music. Both formats can share a playlist. Tracks play in natural filename/path order (`2` before `10`) and repeat after the last track. Music has its own play/pause button, with two subtle bars that respond to the sound, and a flat vertical volume bar. Folders containing only music also work. If the browser blocks automatic audio playback, press the music button or `A` to start.
 
@@ -27,9 +33,11 @@ Music is decoded locally ahead of playback. The next track is scheduled on the a
 - `[` / `]`: previous or next music track
 - `←` / `→`: show the previous or next mix
 - `↓`: dismiss the current mix and show the next one
-- `↑`: hold the current mix for one more selected duration
-- Hold `Shift` over a photo: inspect it with the detail lens and pause the slide countdown; press `+` to zoom in further
-- `Enter` while hovering over a photo: love or unlove it; loved photos may reappear occasionally during the rotation
+- `↑`: hold the current mix for one more slide duration (video duration by default on video slides)
+- Hold `Shift` over a photo or video: inspect it with the detail lens and pause playback and the countdown; press `+` to zoom in further
+- `Enter` while hovering over a photo or video: love or unlove it; loved items may reappear occasionally during the rotation
+- `P` while hovering over a photo or video: feature it on the next slide
+- `V` while hovering over a video: toggle its sound, just like clicking it
 - `F`: toggle fullscreen
 - `O`: choose another folder
 
@@ -52,7 +60,7 @@ In the project's **Settings → Domains**, add `www.zewasliga.com` and `zewaslig
 
 The canonical URL, Open Graph and Twitter cards, robots.txt, and sitemap use `https://www.zewasliga.com/`. After deployment, verify the domain's HTTPS certificate, apex redirect, folder selection, playback, fullscreen, and social image at `/og-image.png`.
 
-Security headers allow local blob images and the inline styles used by the mosaic while blocking network connections from the app, external scripts, and framing. Hashed Vite assets receive immutable caching. There is no catch-all rewrite: this app has one route, so unknown paths should return 404 rather than duplicate the home page.
+Security headers allow local blob images and videos and the inline styles used by the mosaic while blocking network connections from the app, external scripts, and framing. Hashed Vite assets receive immutable caching. There is no catch-all rewrite: this app has one route, so unknown paths should return 404 rather than duplicate the home page.
 
 GitHub Actions runs the test suite and production build on pushes and pull requests. Vercel also runs tests before each build.
 
@@ -60,6 +68,6 @@ GitHub Actions runs the test suite and production build on pushes and pull reque
 
 The favicon uses a charcoal Z and red period on the portfolio's off-white background. `public/` contains the SVG and ICO favicons, Apple touch icon, manifest icons, and a 1200 × 630 PNG social preview. To regenerate the PNG assets on macOS, run `swift scripts/generate-brand-assets.swift`. Assets are checked in, so deployment does not require Swift.
 
-The manifest supplies application identity and home-screen icons; it does not provide offline support. Images and music remain local to the browser and are never uploaded.
+The manifest supplies application identity and home-screen icons; it does not provide offline support. Images, videos, and music remain local to the browser and are never uploaded.
 
 Configuration reference: [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite) and [vercel.json](https://vercel.com/docs/project-configuration/vercel-json).
