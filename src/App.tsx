@@ -398,7 +398,6 @@ export default function Home() {
 
   return (
     <main ref={shellRef} className={`app-shell ${photos.length ? "is-playing" : ""} ${paused ? "is-paused" : ""}`} onPointerMove={wakeChrome}>
-      <div className="ambient" aria-hidden="true" />
       {photos.length ? (
         <section className="mosaic" aria-label="Photo slideshow">
           {frame?.layout.tiles.map((tile) => (
@@ -440,30 +439,17 @@ export default function Home() {
       ) : (
         <section className="welcome">
           <div className="welcome-copy">
-            <div className="eyebrow"><span /> YOUR FOLDER, FULL FRAME</div>
-            <h1>Every photo<br />gets <em>seen.</em></h1>
-            <p className="intro">Turn any image folder into a smart, ever-changing mosaic that fills the screen with less cropping—and gives every photo its moment.</p>
+            <div className="eyebrow">A LOCAL IMAGE SLIDESHOW</div>
+            <h1>Every photo.<br />Room to be seen<span className="accent">.</span></h1>
+            <p className="intro">Choose a folder. Your images find their place in an ever-changing, full-screen mosaic.</p>
             <div className="start-row">
               <button className="primary-action" onClick={chooseFolder}><span>Choose image folder</span><span aria-hidden="true">↗</span></button>
-              <p className="privacy-note"><span>●</span> Stays on this device</p>
+              <p className="privacy-note">On your device. No uploads.</p>
             </div>
             {message && <p className="error-message" role="alert">{message}</p>}
           </div>
 
-          <div className="demo-stage" aria-hidden="true">
-            <div className="demo-toolbar">
-              <span><i /> SMART MIX 01</span>
-              <span>18 / 240 SEEN</span>
-            </div>
-            <div className="demo-mosaic">
-              <div className="demo-tile demo-a"><span>01</span></div>
-              <div className="demo-tile demo-b"><span>02</span></div>
-              <div className="demo-tile demo-c"><span>03</span></div>
-            </div>
-            <div className="demo-progress"><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /><i /></div>
-            <div className="demo-callout"><b>CLICK</b><span>Show it larger next</span></div>
-            <div className="demo-lens"><span>SHIFT</span></div>
-          </div>
+          <div className="features-heading"><span>THOUGHTFULLY ARRANGED</span><span>01 — 04</span></div>
 
           <div className="feature-strip" aria-label="Gallery features">
             <div className="feature"><span className="feature-number">01</span><div><b>Fits the frame</b><small>Smart layouts minimize cropping.</small></div></div>
@@ -474,9 +460,9 @@ export default function Home() {
         </section>
       )}
 
-      <header className={`topbar ${showChrome || !photos.length ? "visible" : ""}`}>
-        <a className="brand" href="/" aria-label="Zewasliga home"><span className="brand-mark"><i /><i /><i /></span><span>ZEWASLIGA</span></a>
-        {photos.length ? <button className="quiet-button" onClick={chooseFolder}>Change folder</button> : <span className="top-note">ZERO WASTE · FULL FRAME</span>}
+      <header className={`topbar ${showChrome || paused || !photos.length ? "visible" : ""}`}>
+        <a className="brand" href="/" aria-label="Zewasliga home"><span>Zewasliga<span className="accent">.</span></span></a>
+        {photos.length ? <button className="quiet-button" onClick={chooseFolder}>Change folder</button> : <span className="top-note">ZERO WASTE / FULL FRAME</span>}
       </header>
 
       {photos.length > 0 && (
@@ -500,7 +486,7 @@ export default function Home() {
       )}
 
       {photos.length > 0 && (
-        <div className={`control-dock ${showChrome ? "visible" : ""}`}>
+        <div className={`control-dock ${showChrome || paused ? "visible" : ""}`}>
           <button className="icon-button" onClick={() => setPaused((value) => !value)} aria-label={paused ? "Play slideshow" : "Pause slideshow"}><span aria-hidden="true">{paused ? "▶" : "Ⅱ"}</span></button>
           <button className="next-button" onClick={advance}>Next mix <span aria-hidden="true">→</span></button>
           <span className="divider" />

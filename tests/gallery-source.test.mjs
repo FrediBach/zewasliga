@@ -23,10 +23,10 @@ test("gallery does not retain starter preview code", async () => {
   assert.doesNotMatch(page, /SkeletonPreview|codex-preview|react-loading-skeleton/);
 });
 
-test("start page stays viewport-contained and highlights the gallery behavior", async () => {
+test("start page allows overflow scrolling and highlights the gallery behavior", async () => {
   const [page, styles] = await Promise.all([readFile(pageUrl, "utf8"), readFile(stylesUrl, "utf8")]);
   assert.match(styles, /\.app-shell \{[^}]*height:100svh[^}]*overflow:hidden/);
-  assert.match(styles, /\.welcome \{[^}]*height:100%[^}]*overflow:hidden/);
+  assert.match(styles, /\.welcome \{[^}]*height:100%[^}]*overflow:auto/);
   assert.match(page, /Fits the frame/);
   assert.match(page, /Fair rotation/);
   assert.match(page, /Direct the mix/);
