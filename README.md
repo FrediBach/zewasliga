@@ -1,6 +1,6 @@
 # Zewasliga
 
-A zero-waste slide gallery that turns a local image directory into a changing, full-screen photo mosaic. Images are read directly in the browser and are never uploaded.
+A zero-waste slide gallery that turns a local directory into a changing, full-screen photo mosaic, with an optional MP3 or WAV soundtrack. Images and music are read directly in the browser and are never uploaded.
 
 Every slide is planned for the current viewport. Zewasliga compares fair combinations of recently unused photos, matches portrait and landscape images to row- and column-based mosaics, and chooses the arrangement with the least crop. Photos that receive the smallest tiles are carried into the next slide and promoted into its largest spaces. The mosaic always covers the full screen and automatically replans itself when the window or device orientation changes.
 
@@ -14,9 +14,17 @@ npm run dev
 
 Open `http://localhost:5173`, choose a folder of JPG, PNG, WebP, AVIF, or GIF files, and the slideshow starts automatically.
 
+Include MP3 or WAV files in the folder or its subfolders to add music. Both formats can share a playlist. Tracks play in natural filename/path order (`2` before `10`) and repeat after the last track. Music has its own play/pause button, with two subtle bars that respond to the sound, and a flat vertical volume bar. Folders containing only music also work. If the browser blocks automatic audio playback, press the music button or `A` to start.
+
+Music is decoded locally ahead of playback. The next track is scheduled on the audio clock, with another track prepared in advance; only a small rolling set of decoded tracks is retained. Short gain ramps soften track edges, pause/resume, skipping, and volume changes. Silence already recorded into an audio file remains part of the track. Unreadable tracks are skipped with a message.
+
 ## Controls
 
-- `Space` or `K`: pause and play
+- `Space` or `K`: pause and play the slideshow
+- `A`: pause and play music independently
+- `M`: mute or unmute music
+- `−` / `=`: lower or raise music volume by 5%
+- `[` / `]`: previous or next music track
 - `←` / `→`: show the previous or next mix
 - `↓`: dismiss the current mix and show the next one
 - `↑`: hold the current mix for one more selected duration
@@ -26,6 +34,8 @@ Open `http://localhost:5173`, choose a folder of JPG, PNG, WebP, AVIF, or GIF fi
 - `O`: choose another folder
 
 The folder picker uses the File System Access API where available and falls back to a directory file input in other browsers.
+
+The volume bar also supports the arrow keys and Home/End when focused. Music shortcuts leave text inputs and native control keys alone. The sound animation respects reduced-motion preferences.
 
 ## Production build
 
@@ -50,6 +60,6 @@ GitHub Actions runs the test suite and production build on pushes and pull reque
 
 The favicon uses a charcoal Z and red period on the portfolio's off-white background. `public/` contains the SVG and ICO favicons, Apple touch icon, manifest icons, and a 1200 × 630 PNG social preview. To regenerate the PNG assets on macOS, run `swift scripts/generate-brand-assets.swift`. Assets are checked in, so deployment does not require Swift.
 
-The manifest supplies application identity and home-screen icons; it does not provide offline support. Images remain local to the browser and are never uploaded.
+The manifest supplies application identity and home-screen icons; it does not provide offline support. Images and music remain local to the browser and are never uploaded.
 
 Configuration reference: [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite) and [vercel.json](https://vercel.com/docs/project-configuration/vercel-json).

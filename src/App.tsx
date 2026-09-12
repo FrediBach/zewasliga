@@ -1,13 +1,9 @@
 import { ChangeEvent, CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { arrangePhotos, createSmartMosaic, MosaicLayout, PhotoUsage, smallTilePriorities, Viewport } from "./layout";
+import { collectMediaFiles, DirectoryPickerWindow, isImageFile, isAudioFile } from "./media";
+import { MusicControls, useAudioPlayer } from "./MusicControls";
 
 type Photo = { id: string; name: string; url: string; width: number; height: number; lastModified: number };
-type DirectoryPickerHandle = FileSystemDirectoryHandle & {
-  values(): AsyncIterableIterator<FileSystemFileHandle | FileSystemDirectoryHandle>;
-};
-type DirectoryPickerWindow = Window & { showDirectoryPicker?: () => Promise<DirectoryPickerHandle> };
-
-const IMAGE_TYPES = new Set(["image/avif", "image/gif", "image/jpeg", "image/png", "image/webp"]);
 const SPEEDS = [3000, 5000, 8000, 12000];
 
 function getDimensions(url: string) {
@@ -20,23 +16,12 @@ function getDimensions(url: string) {
 }
 
 async function photosFromFiles(files: File[]) {
-  const supported = files.filter((file) => IMAGE_TYPES.has(file.type) || /\.(avif|gif|jpe?g|png|webp)$/i.test(file.name));
+  const supported = files.filter(isImageFile);
   return Promise.all(supported.map(async (file, index) => {
     const url = URL.createObjectURL(file);
     const dimensions = await getDimensions(url);
     return { id: `${file.name}-${file.lastModified}-${index}`, name: file.name.replace(/\.[^.]+$/, ""), url, lastModified: file.lastModified, ...dimensions };
   }));
-}
-
-async function collectImages(handle: DirectoryPickerHandle): Promise<File[]> {
-  const files: File[] = [];
-  for await (const entry of handle.values()) {
-    if (entry.kind === "file") {
-      const file = await entry.getFile();
-      if (IMAGE_TYPES.has(file.type) || /\.(avif|gif|jpe?g|png|webp)$/i.test(file.name)) files.push(file);
-    } else if (entry.kind === "directory") files.push(...(await collectImages(entry as DirectoryPickerHandle)));
-  }
-  return files;
 }
 
 type GalleryFrame = { layout: MosaicLayout<Photo>; key: number; prioritizedIds: Set<string> };
@@ -70,7 +55,11 @@ function imageMotion(photoId: string, frameKey: number, area: number, durationMs
 function KeyboardShortcuts() {
   return (
     <dl>
-      <div><dt><kbd>Space</kbd> / <kbd>K</kbd></dt><dd>Pause or play</dd></div>
+      <div><dt><kbd>Space</kbd> / <kbd>K</kbd></dt><dd>Pause / play slideshow</dd></div>
+      <div><dt><kbd>A</kbd></dt><dd>Pause / play music</dd></div>
+      <div><dt><kbd>M</kbd></dt><dd>Mute / unmute music</dd></div>
+      <div><dt><kbd>−</kbd> / <kbd>=</kbd></dt><dd>Music volume</dd></div>
+      <div><dt><kbd>[</kbd> / <kbd>]</kbd></dt><dd>Previous / next track</dd></div>
       <div><dt><kbd>←</kbd></dt><dd>Previous mix</dd></div>
       <div><dt><kbd>→</kbd> / <kbd>↓</kbd></dt><dd>Next mix</dd></div>
       <div><dt><kbd>↑</kbd></dt><dd>Hold this mix longer</dd></div>
@@ -84,6 +73,7 @@ function KeyboardShortcuts() {
 }
 
 export default function Home() {
+  const { audio, player } = useAudioPlayer();
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [frame, setFrame] = useState<GalleryFrame | null>(null);
   const [paused, setPaused] = useState(false);
@@ -95,6 +85,7 @@ export default function Home() {
   const [detailLensZoom, setDetailLensZoom] = useState(DETAIL_LENS_ZOOM);
   const [lovedIds, setLovedIds] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
+  const loadRequestRef = useRef(0);
   const shellRef = useRef<HTMLElement>(null);
   const durationPieRef = useRef<HTMLSpanElement>(null);
   const photosRef = useRef<Photo[]>([]);
@@ -121,6 +112,12 @@ export default function Home() {
   )), [photos]);
   const viewedCount = photos.reduce((count, photo) => count + Number((historyRef.current.get(photo.id)?.shown ?? 0) > 0), 0);
   const timerPaused = paused || detailLens !== null;
+  const hasMedia = photos.length > 0 || audio.tracks.length > 0;
+  const wakeChrome = useCallback(() => {
+    setShowChrome(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    if (hasMedia && !paused) hideTimer.current = setTimeout(() => setShowChrome(false), 2600);
+  }, [hasMedia, paused]);
 
   const advance = useCallback(() => {
     if (!photosRef.current.length) return;
@@ -179,10 +176,14 @@ export default function Home() {
     setFrame(previousFrame);
   }, []);
 
-  const loadFiles = useCallback(async (files: File[]) => {
+  const loadFiles = useCallback(async (files: File[], request = ++loadRequestRef.current) => {
     const nextPhotos = await photosFromFiles(files);
-    if (!nextPhotos.length) {
-      setMessage("No supported images found. Try JPG, PNG, WebP, AVIF, or GIF files.");
+    if (request !== loadRequestRef.current) {
+      nextPhotos.forEach((photo) => URL.revokeObjectURL(photo.url));
+      return;
+    }
+    if (!nextPhotos.length && !files.some(isAudioFile)) {
+      setMessage("No supported images or music found. Try JPG, PNG, WebP, AVIF, GIF, MP3, or WAV files.");
       return;
     }
     photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.url));
@@ -194,7 +195,9 @@ export default function Home() {
     frameIndexRef.current = -1;
     requestedPriorityRef.current = null;
     frameRef.current = null;
+    setFrame(null);
     setPhotos(nextPhotos);
+    player.setFiles(files);
     setLovedIds(new Set());
     const layout = createSmartMosaic(nextPhotos, viewportRef.current, historyRef.current, new Set(), new Set(), 0);
     if (layout) {
@@ -208,21 +211,24 @@ export default function Home() {
     }
     setPaused(false);
     setMessage("");
-  }, []);
+  }, [player]);
 
   const chooseFolder = useCallback(async () => {
+    void player.unlock()?.catch(() => {});
     const picker = (window as DirectoryPickerWindow).showDirectoryPicker;
     if (!picker) { inputRef.current?.click(); return; }
+    const request = ++loadRequestRef.current;
     try {
       const handle = await picker();
-      await loadFiles(await collectImages(handle));
+      await loadFiles(await collectMediaFiles(handle), request);
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      setMessage("That folder couldn’t be opened. Please try again.");
+      if (request === loadRequestRef.current) setMessage("That folder couldn’t be opened. Please try again.");
     }
-  }, [loadFiles]);
+  }, [loadFiles, player]);
 
   const handleFallback = (event: ChangeEvent<HTMLInputElement>) => {
+    void player.unlock()?.catch(() => {});
     void loadFiles(Array.from(event.target.files ?? []));
     event.target.value = "";
   };
@@ -346,22 +352,39 @@ export default function Home() {
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       const target = event.target;
-      if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) return;
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
+      const onVolume = target instanceof HTMLInputElement && target.type === "range" && target.closest(".volume-control");
+      if (!onVolume && target instanceof HTMLElement && target.closest('input, select, textarea, [contenteditable]:not([contenteditable="false"])')) return;
+      if ((event.key === " " || event.key === "Enter") && target instanceof HTMLElement && target.closest("button:not(.tile), a")) return;
+      const key = event.key.toLowerCase();
+      if (audio.tracks.length && ["a", "m", "-", "=", "[", "]"].includes(key)) {
+        event.preventDefault();
+        if (key === "-" || key === "=") player.changeVolume(key === "-" ? -0.05 : 0.05);
+        else if (!event.repeat) {
+          if (key === "a") player.toggle();
+          else if (key === "m") player.toggleMute();
+          else if (key === "[") player.previous();
+          else player.next();
+        }
+        wakeChrome();
+        return;
+      }
+      if (onVolume) return;
+      if (key === "f" && hasMedia) { event.preventDefault(); if (!event.repeat) void toggleFullscreen(); return; }
+      if (key === "o") { event.preventDefault(); if (!event.repeat) void chooseFolder(); return; }
       if (!photosRef.current.length && event.key.toLowerCase() !== "o") return;
       if (event.key === "Enter" && hoveredTileRef.current) {
         event.preventDefault();
         if (!event.repeat) toggleLoved(hoveredTileRef.current.photo.id);
       }
-      else if (event.key === " " || event.key.toLowerCase() === "k") { event.preventDefault(); setPaused((value) => !value); }
+      else if (event.key === " " || event.key.toLowerCase() === "k") { event.preventDefault(); if (!event.repeat) setPaused((value) => !value); }
       else if (event.key === "ArrowLeft") { event.preventDefault(); goBack(); }
       else if (event.key === "ArrowRight" || event.key === "ArrowDown") { event.preventDefault(); advance(); }
       else if (event.key === "ArrowUp") { event.preventDefault(); if (!event.repeat) holdCurrentSlide(); }
-      else if (event.key.toLowerCase() === "f") void toggleFullscreen();
-      else if (event.key.toLowerCase() === "o") void chooseFolder();
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [advance, chooseFolder, goBack, holdCurrentSlide, toggleLoved]);
+  }, [advance, audio.tracks.length, chooseFolder, goBack, hasMedia, holdCurrentSlide, player, toggleLoved, wakeChrome]);
 
   useEffect(() => {
     let animationFrame = 0;
@@ -404,16 +427,14 @@ export default function Home() {
     };
   }, []);
 
-  useEffect(() => () => photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.url)), []);
-
-  const wakeChrome = () => {
-    setShowChrome(true);
+  useEffect(() => () => {
+    loadRequestRef.current += 1;
+    photosRef.current.forEach((photo) => URL.revokeObjectURL(photo.url));
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (photos.length && !paused) hideTimer.current = setTimeout(() => setShowChrome(false), 2600);
-  };
+  }, []);
 
   return (
-    <main ref={shellRef} className={`app-shell ${photos.length ? "is-playing" : ""} ${paused ? "is-paused" : ""}`} onPointerMove={wakeChrome}>
+    <main ref={shellRef} className={`app-shell ${hasMedia ? "is-playing" : ""} ${paused ? "is-paused" : ""}`} onPointerMove={wakeChrome}>
       {photos.length ? (
         <section className="mosaic" aria-label="Photo slideshow">
           {frame?.layout.tiles.map((tile) => (
@@ -452,13 +473,18 @@ export default function Home() {
             </button>
           ))}
         </section>
+      ) : audio.tracks.length ? (
+        <section className="music-canvas" aria-label="Music playback">
+          <span className="eyebrow">ON YOUR DEVICE</span>
+          <p>{audio.tracks[audio.trackIndex]?.name ?? "Your soundtrack"}</p>
+        </section>
       ) : (
         <section className="welcome">
           <div className="welcome-intro">
             <div className="welcome-copy">
               <div className="eyebrow">A LOCAL IMAGE SLIDESHOW</div>
               <h1>Every photo.<br />Room to be seen<span className="accent">.</span></h1>
-              <p className="intro">Choose a folder. Your images find their place in an ever-changing, full-screen mosaic.</p>
+              <p className="intro">Choose a folder. Your images find their place in an ever-changing, full-screen mosaic. Add MP3 or WAV files for a soundtrack.</p>
               <div className="start-row">
                 <button className="primary-action" onClick={chooseFolder}><span>Choose image folder</span><span aria-hidden="true">↗</span></button>
                 <p className="privacy-note">On your device. No uploads.</p>
@@ -483,9 +509,9 @@ export default function Home() {
         </section>
       )}
 
-      <header className={`topbar ${showChrome || paused || !photos.length ? "visible" : ""}`}>
+      <header className={`topbar ${showChrome || paused || !hasMedia ? "visible" : ""}`}>
         <a className="brand" href="/" aria-label="Zewasliga home"><span>Zewasliga<span className="accent">.</span></span></a>
-        {photos.length ? <button className="quiet-button" onClick={chooseFolder}>Change folder</button> : <span className="top-note">ZERO WASTE / FULL FRAME</span>}
+        {hasMedia ? <button className="quiet-button" onClick={chooseFolder}>Change folder</button> : <span className="top-note">ZERO WASTE / FULL FRAME</span>}
       </header>
 
       {photos.length > 0 && (
@@ -508,13 +534,19 @@ export default function Home() {
         </div>
       )}
 
-      {photos.length > 0 && (
+      {hasMedia && (
         <div className={`control-dock ${showChrome || paused ? "visible" : ""}`}>
-          <button className="icon-button" onClick={() => setPaused((value) => !value)} aria-label={paused ? "Play slideshow" : "Pause slideshow"}><span aria-hidden="true">{paused ? "▶" : "Ⅱ"}</span></button>
-          <button className="next-button" onClick={advance}>Next mix <span aria-hidden="true">→</span></button>
-          <span className="divider" />
-          <label className="speed-control"><span>PACE</span><select value={intervalMs} onChange={(event) => setIntervalMs(Number(event.target.value))}>{SPEEDS.map((speed) => <option key={speed} value={speed}>{speed / 1000}s</option>)}</select></label>
-          <span className="counter"><b>{frame?.layout.tiles.length ?? 0}</b> / {photos.length}</span>
+          {photos.length > 0 && <>
+            <button className="icon-button" onClick={() => setPaused((value) => !value)} aria-label={paused ? "Play slideshow" : "Pause slideshow"} aria-keyshortcuts="Space K"><span aria-hidden="true">{paused ? "▶" : "Ⅱ"}</span></button>
+            <button className="next-button" onClick={advance}>Next mix <span aria-hidden="true">→</span></button>
+            <span className="divider" />
+            <label className="speed-control"><span>PACE</span><select value={intervalMs} onChange={(event) => setIntervalMs(Number(event.target.value))}>{SPEEDS.map((speed) => <option key={speed} value={speed}>{speed / 1000}s</option>)}</select></label>
+            <span className="counter"><b>{frame?.layout.tiles.length ?? 0}</b> / {photos.length}</span>
+          </>}
+          {audio.tracks.length > 0 && <>
+            {photos.length > 0 && <span className="divider" />}
+            <MusicControls audio={audio} player={player} visible={showChrome || paused} />
+          </>}
           <button className="fullscreen-button" onClick={toggleFullscreen} aria-label="Toggle fullscreen"><span aria-hidden="true">⌗</span></button>
         </div>
       )}
@@ -530,7 +562,7 @@ export default function Home() {
           title={timerPaused ? "Slide timer paused" : "Slide time remaining"}
         />
       )}
-      {photos.length > 0 && <div className="shortcut-help">
+      {hasMedia && <div className="shortcut-help">
         <button type="button" className="shortcut-help-button" aria-label="Show keyboard shortcuts" aria-describedby="keyboard-shortcuts">?</button>
         <div id="keyboard-shortcuts" className="shortcut-help-panel" role="tooltip">
           <strong>Keyboard shortcuts</strong>
@@ -557,8 +589,8 @@ export default function Home() {
           />
         </div>
       )}
-      {message && photos.length > 0 && <div className="toast" role="alert">{message}</div>}
-      <input ref={inputRef} className="sr-only" type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif" multiple onChange={handleFallback} {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} />
+      {(message || audio.error) && hasMedia && <div className="toast" role="alert">{message || audio.error}</div>}
+      <input ref={inputRef} className="sr-only" tabIndex={-1} type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/wave,audio/vnd.wave,.mp3,.wav" multiple onChange={handleFallback} {...({ webkitdirectory: "", directory: "" } as React.InputHTMLAttributes<HTMLInputElement>)} />
     </main>
   );
 }

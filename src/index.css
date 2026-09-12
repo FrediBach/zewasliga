@@ -5,7 +5,7 @@ html,body,#root { margin:0; width:100%; height:100%; background:var(--paper); co
 body { font-family:Arial,Helvetica,sans-serif; -webkit-font-smoothing:antialiased; }
 button,select { font:inherit; }
 button { color:inherit; }
-button:focus-visible,a:focus-visible,select:focus-visible { outline:2px solid var(--accent); outline-offset:5px; }
+button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible { outline:2px solid var(--accent); outline-offset:5px; }
 .accent { color:var(--accent); }
 .app-shell { width:100%; height:100svh; position:relative; overflow:hidden; background:var(--paper); isolation:isolate; }
 .topbar { position:absolute; z-index:20; top:0; left:0; width:100%; height:100px; display:flex; align-items:center; justify-content:space-between; padding:0 max(32px,calc((100vw - 1200px)/2)); transition:opacity .25s ease; }
@@ -60,6 +60,25 @@ h1 { margin:22px 0 24px; font-size:clamp(48px,6.2vw,88px); font-weight:400; line
 .control-dock button { border:0; cursor:pointer; }
 .icon-button,.fullscreen-button { width:44px; height:44px; border-radius:0; background:rgba(255,255,255,.1); color:white; }
 .icon-button:hover,.fullscreen-button:hover { background:rgba(255,255,255,.2); }
+.music-controls { display:flex; align-items:center; gap:2px; flex-shrink:0; }
+.music-button { position:relative; display:grid; place-items:center; }
+.music-button.playing { color:var(--paper); }
+.music-mark { position:absolute; bottom:5px; left:50%; width:8px; height:1px; transform:translateX(-50%); background:var(--accent); }
+.music-levels { display:flex; align-items:center; justify-content:center; gap:4px; height:16px; }
+.music-levels i { display:block; width:2px; height:13px; background:currentColor; transform-origin:center; }
+.volume-control { position:relative; display:block; width:28px; height:44px; cursor:pointer; }
+.volume-bar { position:absolute; width:3px; top:6px; bottom:6px; left:calc(50% - 1.5px); background:rgba(255,255,255,.24); pointer-events:none; }
+.volume-bar>span { position:absolute; bottom:0; width:100%; height:var(--volume); background:var(--paper); }
+.volume-control:hover .volume-bar>span { background:var(--accent); }
+.volume-control input { position:absolute; inset:0; margin:0; width:100%; height:100%; appearance:none; -webkit-appearance:none; writing-mode:vertical-lr; direction:rtl; background:transparent; cursor:pointer; border-radius:0; touch-action:none; }
+.volume-control input::-webkit-slider-runnable-track { width:3px; height:100%; background:transparent; border:0; }
+.volume-control input::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width:28px; height:12px; margin-left:-12.5px; background:transparent; border:0; }
+.volume-control input::-moz-range-track { width:3px; height:100%; background:transparent; border:0; }
+.volume-control input::-moz-range-progress { background:transparent; }
+.volume-control input::-moz-range-thumb { width:28px; height:12px; background:transparent; border:0; border-radius:0; }
+.music-canvas { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:100px 32px; background:#171814; color:var(--paper); text-align:center; }
+.music-canvas .eyebrow { color:rgba(255,255,255,.45); }
+.music-canvas p { max-width:700px; margin:0; font-size:clamp(24px,4vw,48px); line-height:1.2; letter-spacing:-.04em; overflow-wrap:anywhere; }
 .next-button { height:44px; padding:0 16px; border-radius:0; background:var(--accent); color:var(--paper); font-weight:400; }
 .next-button span { margin-left:16px; font-size:18px; }
 .divider { width:1px; height:28px; background:rgba(255,255,255,.18); margin:0 2px; }
@@ -93,7 +112,8 @@ h1 { margin:22px 0 24px; font-size:clamp(48px,6.2vw,88px); font-weight:400; line
 @keyframes image-zoom { from { transform:scale(var(--zoom-from)); } to { transform:scale(var(--zoom-to)); } }
 
 
-.shortcut-help-panel { background:var(--paper); color:var(--ink); border-color:var(--line); box-shadow:none; backdrop-filter:none; }
+.shortcut-help-panel { max-height:calc(100svh - 80px); overflow-y:auto; background:var(--paper); color:var(--ink); border-color:var(--line); box-shadow:none; backdrop-filter:none; }
+.shortcut-help:hover .shortcut-help-panel,.shortcut-help:focus-within .shortcut-help-panel { pointer-events:auto; }
 .shortcut-help-panel dd { color:var(--muted); }
 .shortcut-help-panel kbd { color:var(--ink); border-color:var(--line); background:transparent; }
 @media (max-height:850px) and (min-width:701px) {
@@ -125,10 +145,19 @@ h1 { margin:22px 0 24px; font-size:clamp(48px,6.2vw,88px); font-weight:400; line
   .control-dock { width:calc(100% - 32px); bottom:16px; gap:6px; justify-content:center; }
   .duration-pie { right:18px; bottom:92px; }
   .is-playing .shortcut-help { left:18px; bottom:92px; }
-  .shortcut-help-panel { width:min(270px,calc(100vw - 48px)); }
+  .shortcut-help-panel { width:min(270px,calc(100vw - 48px)); max-height:calc(100svh - 148px); }
   .counter,.divider { display:none; }
-  .next-button { flex:1; padding:0 10px; }
+  .icon-button,.fullscreen-button { width:38px; flex-shrink:0; }
+  .speed-control { padding:0 2px; }
+  .music-controls { gap:0; }
+  .volume-control { width:24px; }
+  .next-button { flex:1; padding:0 10px; white-space:nowrap; }
   .next-button span { margin-left:8px; }
+}
+@media (max-width:360px) {
+  .control-dock { width:calc(100% - 24px); gap:4px; padding:6px; }
+  .next-button { padding:0 6px; font-size:12px; }
+  .next-button span { margin-left:4px; }
 }
 @media (min-width:701px) and (max-height:650px) { .welcome { overflow-y:auto; } .welcome-intro { margin-bottom:24px; } }
 @media (prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; } }
